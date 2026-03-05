@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import EnginePlumes, { computeEnginePositions, BOOSTER_RINGS } from './ExhaustPlume'
 import { EARTH_RADIUS } from '../physics/index.js'
+import { initModel } from './modelUtils'
 
 export default function Booster({ simRef, groupRef }) {
   const { scene } = useGLTF('/models/starship-full.glb', true)
@@ -14,63 +15,22 @@ export default function Booster({ simRef, groupRef }) {
   const [modelReady, setModelReady] = useState(false)
   const [boosterPhase, setBoosterPhase] = useState('attached')
 
-  // Clone the FULL scene (same as Rocket) — preserves all transforms.
-  // We'll hide non-booster parts instead of extracting just the booster node.
   const clonedScene = useMemo(() => scene.clone(true), [scene])
 
   useEffect(() => {
     const root = innerRef.current
     if (!root) return
 
-    let boosterNode = null
-    const gridFins = []
+    const { gridFins, boosterNode, box2 } = initModel(root)
 
+    // Hide everything, then show only the booster subtree
     root.traverse((child) => {
-      if (child.isMesh) {
-        child.frustumCulled = false
-        child.castShadow = true
-        child.receiveShadow = true
-        if (child.material) {
-          child.material = child.material.clone()
-          child.material.side = THREE.DoubleSide
-          child.material.envMapIntensity = 0.8
-        }
-      }
-      if (child.name && child.name.startsWith('Superheavy')) {
-        boosterNode = child
-      }
-      if (child.name && child.name.includes('Gridfin')) {
-        gridFins.push(child)
-        child.userData.origQuat = child.quaternion.clone()
-      }
-    })
-
-    // Scale to 120m (reset first so effect is idempotent under StrictMode)
-    root.scale.set(1, 1, 1)
-    root.position.set(0, 0, 0)
-    root.rotation.set(0, 0, 0)
-    root.updateMatrixWorld(true)
-    const box = new THREE.Box3().setFromObject(root)
-    const height = box.max.y - box.min.y
-    root.scale.setScalar(120 / height)
-
-    root.updateMatrixWorld(true)
-    const box2 = new THREE.Box3().setFromObject(root)
-    root.position.x = -(box2.min.x + box2.max.x) / 2
-    root.position.z = -(box2.min.z + box2.max.z) / 2
-
-    // Hide everything, then selectively show only the booster subtree
-    root.traverse((child) => {
-      if (child.isMesh) {
-        child.visible = false
-      }
+      if (child.isMesh) child.visible = false
     })
 
     if (boosterNode) {
       boosterNode.visible = true
-      boosterNode.traverse((child) => {
-        child.visible = true
-      })
+      boosterNode.traverse((child) => { child.visible = true })
 
       let ancestor = boosterNode.parent
       while (ancestor && ancestor !== root) {
@@ -84,8 +44,6 @@ export default function Booster({ simRef, groupRef }) {
     } else {
       root.position.y = -box2.min.y
     }
-
-    root.rotation.y = -Math.PI / 2
 
     gridFinsRef.current = gridFins
     setModelReady(true)
@@ -104,7 +62,6 @@ export default function Booster({ simRef, groupRef }) {
       return
     }
 
-    // Only trigger React re-render when booster phase changes (affects engine config)
     if (phase !== boosterPhase) {
       setBoosterPhase(phase)
     }

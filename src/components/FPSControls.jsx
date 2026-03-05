@@ -16,7 +16,7 @@ const ORBIT_FOV = 50
 const FULL_STACK_HEIGHT = 120
 const FULL_STACK_CENTER = 20    // near base of rocket
 const SHIP_HEIGHT = 50
-const SHIP_CENTER = 95          // middle of visible ship portion (~70..120)
+const SHIP_CENTER = 80          // lower-body of visible ship portion (~70..120)
 const BOOSTER_HEIGHT = 71
 const BOOSTER_CENTER = 15       // near base of booster
 

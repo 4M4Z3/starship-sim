@@ -271,8 +271,6 @@ export function physicsStep(state, dt, phase) {
         s.totalMass = shipProps.totalMass
         s.shipCom = shipProps.com
         s.shipI = shipProps.I
-        s.thrustForce = SHIP.totalThrust
-        s.massFlow = SHIP.massFlow
       }
     } else {
       // Ship powered flight after staging
@@ -417,12 +415,12 @@ export function physicsStep(state, dt, phase) {
     const timeSinceSep = s.missionTime - s.stageTime
     const bAlt = s.boosterR - EARTH_RADIUS
     const bSpeed = Math.sqrt(s.boosterVr * s.boosterVr + s.boosterVt * s.boosterVt)
-    const bMass = BOOSTER.dryMass + s.boosterBoostbackFuel + s.boosterLandingFuel
     const gLocal = GM / (s.boosterR * s.boosterR)
 
     // Mass properties for booster
     const boosterFuelTotal = s.boosterBoostbackFuel + s.boosterLandingFuel
     const bMassProps = computeMassProperties('booster', boosterFuelTotal)
+    const bMass = bMassProps.totalMass
     s.boosterCom = bMassProps.com
     s.boosterI = bMassProps.I
 

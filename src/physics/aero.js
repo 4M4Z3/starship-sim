@@ -97,8 +97,8 @@ export function computeAeroForces({
 
   // Angle of attack = body orientation - flight path angle
   let alpha = angle - flightPathAngle
-  // Wrap to [-π, π]
-  alpha = ((alpha + Math.PI) % (2 * Math.PI)) - Math.PI
+  // Wrap to [-π, π] (JS % preserves sign, so add 2π to ensure positive before modulo)
+  alpha = (((alpha + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI
 
   const sinAlpha = Math.sin(alpha)
   const cosAlpha = Math.cos(alpha)

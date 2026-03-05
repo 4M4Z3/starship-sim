@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
-import { BOOSTER, SHIP, EARTH_RADIUS as EARTH_R } from '../physics/index.js'
+import { BOOSTER, SHIP, EARTH_RADIUS as EARTH_R, SCENARIOS } from '../physics/index.js'
 
 const TIME_SCALES = [1, 2, 5, 10, 25, 50, 100]
 const CAMERAS = ['Ground', 'Ship', 'Booster']
 const CAMERA_KEYS = { Ground: 'ground', Ship: 'ship', Booster: 'booster' }
 
-/* Solid dark panel — inline style so it ALWAYS works regardless of Tailwind */
+// ── Shared styles ──
+
 const panelStyle = {
   background: 'rgba(10, 12, 18, 0.85)',
   backdropFilter: 'blur(20px)',
@@ -14,7 +15,77 @@ const panelStyle = {
   borderRadius: 16,
 }
 
-/* ── Callout ── */
+const btnBase = {
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: 12,
+  padding: '12px 20px',
+  fontSize: 15,
+  fontWeight: 500,
+  fontFamily: 'inherit',
+  color: 'rgba(255,255,255,0.45)',
+  background: 'transparent',
+  transition: 'all 0.1s',
+  whiteSpace: 'nowrap',
+}
+
+const FONT = "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
+const MONO = "'SF Mono', 'Cascadia Code', 'Consolas', monospace"
+
+// ── Formatters ──
+
+const fmt = (n, d = 1) => {
+  if (n == null || isNaN(n)) return '\u2014'
+  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(d) + 'M'
+  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(d) + 'k'
+  return n.toFixed(d)
+}
+
+const dist = (m) => {
+  if (m == null || isNaN(m)) return '\u2014'
+  return Math.abs(m) >= 1000 ? (m / 1000).toFixed(2) + ' km' : m.toFixed(1) + ' m'
+}
+
+const vel = (v) => {
+  if (v == null || isNaN(v)) return '\u2014'
+  return Math.abs(v) >= 1000 ? (v / 1000).toFixed(2) + ' km/s' : v.toFixed(1) + ' m/s'
+}
+
+const tmr = (s) => {
+  if (s == null || isNaN(s)) return 'T+0:00'
+  return `T+${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+}
+
+const deg = (r) => ((r ?? 0) * 180 / Math.PI).toFixed(1)
+
+// ── Phase labels and colors ──
+
+const PHASE_LABELS = {
+  idle: 'Standing By', launching: 'Powered Ascent', staged: 'Ship Burn',
+  falling: 'Free Fall', fuel_exhausted: 'MECO', orbit: 'In Orbit', landed: 'Landed',
+}
+const PHASE_COLORS = {
+  idle: '#888', launching: '#fb923c', staged: '#22d3ee',
+  falling: '#f87171', fuel_exhausted: '#facc15', orbit: '#4ade80', landed: '#4ade80',
+}
+const BOOSTER_LABELS = {
+  coast: 'Coast', boostback: 'Boostback', descent: 'Belly-Flop',
+  landing: 'Landing Burn', hover: 'Hovering', splashed: 'Splashdown',
+}
+const BOOSTER_COLORS = {
+  coast: '#facc15', boostback: '#fb923c', descent: '#facc15',
+  landing: '#f87171', hover: '#fdba74', splashed: '#60a5fa',
+}
+const ACTION_LABELS = {
+  idle: 'Launch', launching: 'Cut-off', staged: 'Cut-off',
+  falling: 'Reset', landed: 'Reset', fuel_exhausted: 'Reset', orbit: 'Reset',
+}
+
+// ══════════════════════════════════════
+// Callout — temporary overlay notification
+// ══════════════════════════════════════
+
 function Callout({ show, children }) {
   const [visible, setVisible] = useState(false)
   const [opacity, setOpacity] = useState(0)
@@ -25,7 +96,9 @@ function Callout({ show, children }) {
       setVisible(true)
       requestAnimationFrame(() => setOpacity(1))
       timer.current = setTimeout(() => setOpacity(0), 4000)
-    } else { setOpacity(0) }
+    } else {
+      setOpacity(0)
+    }
     return () => { if (timer.current) clearTimeout(timer.current) }
   }, [show])
 
@@ -38,31 +111,39 @@ function Callout({ show, children }) {
 
   if (!visible) return null
   return (
-    <div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 20, transition: 'opacity 0.5s', opacity, textAlign: 'center' }}>
+    <div style={{
+      position: 'absolute', top: '30%', left: '50%',
+      transform: 'translate(-50%,-50%)', zIndex: 20,
+      transition: 'opacity 0.5s', opacity, textAlign: 'center',
+    }}>
       <div style={{ ...panelStyle, padding: '28px 48px' }}>{children}</div>
     </div>
   )
 }
 
-/* ════════════════════════════════════
-   HUD
-   ════════════════════════════════════ */
+// ══════════════════════════════════════
+// HUD — main export
+// ══════════════════════════════════════
+
 export default function HUD({
-  phase, simRef, timeScaleRef, cameraTarget,
-  onLaunch, onStop, onReset, onToggleCamera, onSetCamera,
+  phase, simRef, timeScaleRef, cameraTarget, scenario,
+  onLaunch, onStop, onReset, onToggleCamera, onSetCamera, onScenarioChange,
 }) {
   const [tel, setTel] = useState({})
   const [ts, setTs] = useState(1)
   const [showStaged, setShowStaged] = useState(false)
   const [showOrbit, setShowOrbit] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showScenarios, setShowScenarios] = useState(false)
   const prev = useRef(phase)
 
+  // Poll sim state for display (decoupled from render loop)
   useEffect(() => {
     const id = setInterval(() => setTel({ ...simRef.current }), 50)
     return () => clearInterval(id)
   }, [simRef])
 
+  // Track phase transitions for callouts
   useEffect(() => {
     if (phase === 'staged' && prev.current === 'launching') setShowStaged(true)
     if (phase === 'orbit' && prev.current === 'staged') setShowOrbit(true)
@@ -70,6 +151,7 @@ export default function HUD({
     prev.current = phase
   }, [phase])
 
+  // Time scale controls
   const slower = () => setTs(p => {
     const i = Math.max(0, TIME_SCALES.indexOf(p) - 1)
     const n = TIME_SCALES[i]; timeScaleRef.current = n; return n
@@ -79,6 +161,7 @@ export default function HUD({
     const n = TIME_SCALES[i]; timeScaleRef.current = n; return n
   })
 
+  // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e) => {
       if (e.code === 'KeyE' && phase === 'idle') onLaunch()
@@ -95,40 +178,13 @@ export default function HUD({
     return () => window.removeEventListener('keydown', onKey)
   }, [phase, onLaunch, onStop, onReset, onToggleCamera, onSetCamera, timeScaleRef])
 
-  const fmt = (n, d = 1) => {
-    if (n == null || isNaN(n)) return '—'
-    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(d) + 'M'
-    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(d) + 'k'
-    return n.toFixed(d)
-  }
-  const dist = (m) => {
-    if (m == null || isNaN(m)) return '—'
-    return Math.abs(m) >= 1000 ? (m / 1000).toFixed(2) + ' km' : m.toFixed(1) + ' m'
-  }
-  const vel = (v) => {
-    if (v == null || isNaN(v)) return '—'
-    return Math.abs(v) >= 1000 ? (v / 1000).toFixed(2) + ' km/s' : v.toFixed(1) + ' m/s'
-  }
-  const tmr = (s) => {
-    if (s == null || isNaN(s)) return 'T+0:00'
-    return `T+${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-  }
-  const deg = (r) => ((r ?? 0) * 180 / Math.PI).toFixed(1)
-
+  // Derived telemetry
   const bFuel = ((tel.boosterFuel ?? 0) + (tel.boosterReturnFuel ?? 0)) / BOOSTER.propellantMass * 100
   const sFuel = tel.shipFuel != null ? (tel.shipFuel / SHIP.propellantMass) * 100 : 100
-
-  const phLabel = { idle: 'Standing By', launching: 'Powered Ascent', staged: 'Ship Burn', falling: 'Free Fall', fuel_exhausted: 'MECO', orbit: 'In Orbit', landed: 'Landed' }[phase] || phase
-  const phDot = { idle: '#888', launching: '#fb923c', staged: '#22d3ee', falling: '#f87171', fuel_exhausted: '#facc15', orbit: '#4ade80', landed: '#4ade80' }[phase] || '#888'
-
-  const bLabel = { coast: 'Coast', boostback: 'Boostback', descent: 'Belly-Flop', landing: 'Landing Burn', hover: 'Hovering', splashed: 'Splashdown' }[tel.boosterPhase] || ''
-  const bDotC = { coast: '#facc15', boostback: '#fb923c', descent: '#facc15', landing: '#f87171', hover: '#fdba74', splashed: '#60a5fa' }[tel.boosterPhase] || '#666'
-
   const bAlt = (tel.boosterR ?? EARTH_R) - EARTH_R
   const bVr = tel.boosterVr ?? 0
   const bVt = tel.boosterVt ?? 0
   const bSpd = Math.sqrt(bVr * bVr + bVt * bVt)
-  const bOmega = tel.boosterOmega ?? 0
   const bEng = tel.boosterPhase === 'boostback' || tel.boosterPhase === 'landing' || tel.boosterPhase === 'hover'
 
   const doAction = () => {
@@ -136,94 +192,139 @@ export default function HUD({
     else if (phase === 'launching' || phase === 'staged') onStop()
     else onReset()
   }
-  const actionLabel = { idle: 'Launch', launching: 'Cut-off', staged: 'Cut-off', falling: 'Reset', landed: 'Reset', fuel_exhausted: 'Reset', orbit: 'Reset' }[phase]
-
-  const font = "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
-  const mono = "'SF Mono', 'Cascadia Code', 'Consolas', monospace"
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none', fontFamily: font, color: 'white' }}>
+    <div style={{
+      position: 'absolute', inset: 0, overflow: 'hidden',
+      pointerEvents: 'none', userSelect: 'none', fontFamily: FONT, color: 'white',
+    }}>
 
-      {/* ═══ TOP: status ═══ */}
+      {/* ═══ TOP: status bar ═══ */}
       <div style={{ position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)' }}>
         <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 20, padding: '14px 32px' }}>
-          <svg width="12" height="12"><circle cx="6" cy="6" r="6" fill={phDot} /></svg>
-          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>{phLabel}</span>
+          <StatusDot color={PHASE_COLORS[phase]} />
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>
+            {PHASE_LABELS[phase] || phase}
+          </span>
           <span style={{ opacity: 0.15, fontSize: 18 }}>|</span>
-          <span style={{ fontSize: 15, opacity: 0.45, fontFamily: mono, fontVariantNumeric: 'tabular-nums' }}>{tmr(tel.missionTime)}</span>
+          <span style={{ fontSize: 15, opacity: 0.45, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+            {tmr(tel.missionTime)}
+          </span>
         </div>
       </div>
 
       {/* ═══ BOTTOM: controls ═══ */}
       <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)' }}>
         <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 6, padding: 8 }}>
-          <Btn onClick={slower}>−</Btn>
-          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: mono, fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'center', color: ts > 1 ? '#facc15' : 'rgba(255,255,255,0.4)' }}>{ts}x</span>
+          <Btn onClick={slower}>{'\u2212'}</Btn>
+          <span style={{
+            fontSize: 15, fontWeight: 600, fontFamily: MONO,
+            fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'center',
+            color: ts > 1 ? '#facc15' : 'rgba(255,255,255,0.4)',
+          }}>{ts}x</span>
           <Btn onClick={faster}>+</Btn>
           <Sep />
           {CAMERAS.map(c => (
             <Btn key={c} onClick={() => onSetCamera(CAMERA_KEYS[c])} active={cameraTarget === CAMERA_KEYS[c]}>{c}</Btn>
           ))}
           <Sep />
-          {actionLabel && <Btn onClick={doAction} accent={phase === 'idle'}>{actionLabel}</Btn>}
+          {ACTION_LABELS[phase] && <Btn onClick={doAction} accent={phase === 'idle'}>{ACTION_LABELS[phase]}</Btn>}
         </div>
       </div>
 
       {/* ═══ LEFT: flight data ═══ */}
-      <div style={{ position: 'absolute', top: 20, left: 20, ...panelStyle, padding: '20px 24px', width: 230, maxHeight: 'calc(100vh - 110px)', overflowY: 'auto', pointerEvents: 'auto' }}>
+      <div style={{
+        position: 'absolute', top: 20, left: 20,
+        ...panelStyle, padding: '20px 24px', width: 230,
+        maxHeight: 'calc(100vh - 110px)', overflowY: 'auto', pointerEvents: 'auto',
+      }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Row l="Thrust" v={`${fmt(tel.thrustForce)} N`} />
           <Row l="Drag" v={`${fmt(tel.dragForce)} N`} />
           <Row l="Mach" v={(tel.mach ?? 0).toFixed(2)} />
           <Row l="Max Q" v={`${fmt(tel.dynamicPressure)} Pa`} />
         </div>
-        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        <Section>
           <Fuel label="Booster" pct={bFuel} />
           <Fuel label="Ship" pct={sFuel} />
-        </div>
+        </Section>
+
         {(tel.altitude > 50000 || tel.inOrbit) && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Section>
             <Row l="Apoapsis" v={dist(tel.apoapsis)} />
             <Row l="Periapsis" v={dist(tel.periapsis)} warn={(tel.periapsis ?? 0) < 0} />
             <Row l="Eccentricity" v={(tel.eccentricity ?? 0).toFixed(4)} />
-          </div>
+          </Section>
         )}
 
         {/* Advanced toggle */}
-        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <Section>
           <button
             onClick={() => setShowAdvanced(p => !p)}
             style={{
-              ...btnBase,
-              width: '100%',
-              padding: '8px 0',
-              fontSize: 11,
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              opacity: 0.35,
+              ...btnBase, width: '100%', padding: '8px 0',
+              fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase',
+              textAlign: 'center', opacity: 0.35,
             }}
           >
-            {showAdvanced ? '▾ Advanced' : '▸ Advanced'}
+            {showAdvanced ? '\u25BE Advanced' : '\u25B8 Advanced'}
           </button>
 
           {showAdvanced && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
               <Row l="Total Mass" v={`${fmt(tel.totalMass)} kg`} />
-              <Row l="Thrust Accel" v={`${(tel.thrustAccel ?? 0).toFixed(2)} m/s²`} />
-              <Row l="Drag Accel" v={`${(tel.dragAccel ?? 0).toFixed(2)} m/s²`} />
-              <Row l="Net Accel" v={`${(tel.netAccel ?? 0).toFixed(2)} m/s²`} />
-              <Row l="Gravity" v={`${(tel.gravity ?? 0).toFixed(2)} m/s²`} />
-              <Row l="TWR" v={tel.gravity > 0 ? ((tel.thrustAccel ?? 0) / tel.gravity).toFixed(2) : '—'} />
+              <Row l="Thrust Accel" v={`${(tel.thrustAccel ?? 0).toFixed(2)} m/s\u00B2`} />
+              <Row l="Drag Accel" v={`${(tel.dragAccel ?? 0).toFixed(2)} m/s\u00B2`} />
+              <Row l="Net Accel" v={`${(tel.netAccel ?? 0).toFixed(2)} m/s\u00B2`} />
+              <Row l="Gravity" v={`${(tel.gravity ?? 0).toFixed(2)} m/s\u00B2`} />
+              <Row l="TWR" v={tel.gravity > 0 ? ((tel.thrustAccel ?? 0) / tel.gravity).toFixed(2) : '\u2014'} />
               <Row l="Drag Coeff" v={(tel.cd ?? 0).toFixed(3)} />
               <Row l="Peak Q" v={`${fmt(tel.maxQ)} Pa`} />
               <Row l="Mass Flow" v={`${(tel.massFlow ?? 0).toFixed(1)} kg/s`} />
               <Row l="Fuel Rem" v={`${(tel.fuelPercent ?? 0).toFixed(1)}%`} />
               {tel.stageTime > 0 && <Row l="Stage Time" v={`T+${Math.floor(tel.stageTime)}s`} />}
-              <Row l="Heading" v={`${deg(tel.heading)}°`} />
+              <Row l="Heading" v={`${deg(tel.heading)}\u00B0`} />
             </div>
           )}
-        </div>
+        </Section>
+
+        {/* Scenario selector — only in idle */}
+        {phase === 'idle' && (
+          <Section>
+            <button
+              onClick={() => setShowScenarios(p => !p)}
+              style={{
+                ...btnBase, width: '100%', padding: '8px 0',
+                fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase',
+                textAlign: 'center', opacity: 0.35,
+              }}
+            >
+              {showScenarios ? '\u25BE Mission' : '\u25B8 Mission'}
+            </button>
+            {showScenarios && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                {Object.entries(SCENARIOS).map(([id, s]) => (
+                  <button
+                    key={id}
+                    onClick={() => { onScenarioChange(id); setShowScenarios(false) }}
+                    style={{
+                      ...btnBase,
+                      padding: '8px 12px',
+                      textAlign: 'left',
+                      borderRadius: 8,
+                      background: scenario === id ? 'rgba(34,211,238,0.12)' : 'transparent',
+                      color: scenario === id ? '#22d3ee' : 'rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
+                    <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>{s.description}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
       </div>
 
       {/* ═══ RIGHT: vehicles ═══ */}
@@ -232,15 +333,16 @@ export default function HUD({
           name="Starship" active={!tel.staged || cameraTarget === 'ship'}
           alt={tel.altitude} spd={tel.speed} vr={tel.vr} vt={tel.vt}
           pitch={tel.angle} aoa={tel.alpha} omega={tel.omega} gimbal={tel.gimbalAngle}
-          dist={dist} vel={vel} deg={deg} angle={tel.angle ?? 0}
+          angle={tel.angle ?? 0}
           engine={tel.staged ? <ShipEngine on={tel.enginesOn} /> : <BoosterEngine on={tel.enginesOn} />}
         />
         <Vehicle
           name="Super Heavy" active={tel.staged && cameraTarget === 'booster'} dimmed={!tel.staged}
-          badge={bLabel} badgeDot={bDotC}
+          badge={BOOSTER_LABELS[tel.boosterPhase]} badgeDot={BOOSTER_COLORS[tel.boosterPhase]}
           alt={bAlt} spd={bSpd} vr={bVr} vt={bVt}
-          pitch={tel.boosterAngle} aoa={tel.boosterAlpha} omega={bOmega} gimbal={tel.boosterGimbalAngle}
-          fins={tel.boosterFinDeflection} dist={dist} vel={vel} deg={deg} angle={tel.boosterAngle ?? 0}
+          pitch={tel.boosterAngle} aoa={tel.boosterAlpha} omega={tel.boosterOmega ?? 0}
+          gimbal={tel.boosterGimbalAngle} fins={tel.boosterFinDeflection}
+          angle={tel.boosterAngle ?? 0}
           engine={<BoosterEngine on={bEng} phase={tel.boosterPhase} />}
         />
       </div>
@@ -265,20 +367,12 @@ export default function HUD({
   )
 }
 
-/* ── Button ── */
-const btnBase = {
-  pointerEvents: 'auto',
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: 12,
-  padding: '12px 20px',
-  fontSize: 15,
-  fontWeight: 500,
-  fontFamily: 'inherit',
-  color: 'rgba(255,255,255,0.45)',
-  background: 'transparent',
-  transition: 'all 0.1s',
-  whiteSpace: 'nowrap',
+// ══════════════════════════════════════
+// Reusable sub-components
+// ══════════════════════════════════════
+
+function StatusDot({ color, size = 12 }) {
+  return <svg width={size} height={size}><circle cx={size / 2} cy={size / 2} r={size / 2} fill={color} /></svg>
 }
 
 function Btn({ children, onClick, active, accent }) {
@@ -287,34 +381,59 @@ function Btn({ children, onClick, active, accent }) {
     ...(active ? { background: 'rgba(255,255,255,0.12)', color: '#fff' } : {}),
     ...(accent ? { background: 'rgba(34,211,238,0.15)', color: '#22d3ee' } : {}),
   }
-  return <button style={style} onClick={onClick} onMouseEnter={e => { if (!active) e.target.style.background = 'rgba(255,255,255,0.08)' }} onMouseLeave={e => { if (!active && !accent) e.target.style.background = 'transparent'; if (accent) e.target.style.background = 'rgba(34,211,238,0.15)' }}>{children}</button>
+  return (
+    <button
+      style={style}
+      onClick={onClick}
+      onMouseEnter={e => { if (!active) e.target.style.background = 'rgba(255,255,255,0.08)' }}
+      onMouseLeave={e => {
+        if (!active && !accent) e.target.style.background = 'transparent'
+        if (accent) e.target.style.background = 'rgba(34,211,238,0.15)'
+      }}
+    >
+      {children}
+    </button>
+  )
 }
 
 function Sep() {
   return <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)', margin: '0 8px' }} />
 }
 
-/* ── Row ── */
-function Row({ l, v, warn }) {
+function Section({ children }) {
   return (
-    <div>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3, marginBottom: 2 }}>{l}</div>
-      <div style={{ fontSize: 15, fontFamily: "'SF Mono','Cascadia Code','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: warn ? 1 : 0.8, color: warn ? '#f87171' : 'inherit' }}>{v}</div>
+    <div style={{
+      marginTop: 16, paddingTop: 14,
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      {children}
     </div>
   )
 }
 
-/* ── Fuel ── */
+function Row({ l, v, warn }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3, marginBottom: 2 }}>{l}</div>
+      <div style={{
+        fontSize: 15, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
+        opacity: warn ? 1 : 0.8, color: warn ? '#f87171' : 'inherit',
+      }}>{v}</div>
+    </div>
+  )
+}
+
 function Fuel({ label, pct }) {
   const c = pct > 20 ? '#4ade80' : pct > 5 ? '#facc15' : '#f87171'
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <svg width="8" height="8"><circle cx="4" cy="4" r="4" fill={c} /></svg>
+          <StatusDot color={c} size={8} />
           <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3 }}>{label}</span>
         </div>
-        <span style={{ fontSize: 12, fontFamily: "'SF Mono','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: 0.4 }}>{pct.toFixed(0)}%</span>
+        <span style={{ fontSize: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', opacity: 0.4 }}>{pct.toFixed(0)}%</span>
       </div>
       <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 2, background: 'rgba(255,255,255,0.25)', width: `${pct}%`, transition: 'width 0.15s' }} />
@@ -323,21 +442,20 @@ function Fuel({ label, pct }) {
   )
 }
 
-/* ── Vehicle ── */
-function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitch, aoa, omega, gimbal, fins, dist, vel, deg, angle, engine }) {
+// ── Vehicle card ──
+
+function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitch, aoa, omega, gimbal, fins, angle, engine }) {
   return (
     <div style={{
-      ...panelStyle,
-      padding: '20px 22px',
-      opacity: dimmed ? 0.25 : 1,
-      transition: 'opacity 0.3s',
+      ...panelStyle, padding: '20px 22px',
+      opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.3s',
       borderLeft: active ? '3px solid rgba(34,211,238,0.4)' : '3px solid transparent',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 }}>{name}</span>
         {badge && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="7" height="7"><circle cx="3.5" cy="3.5" r="3.5" fill={badgeDot} /></svg>
+            <StatusDot color={badgeDot} size={7} />
             <span style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.4 }}>{badge}</span>
           </div>
         )}
@@ -353,11 +471,11 @@ function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitc
         <Mini l="Speed" v={vel(spd)} />
         <Mini l="Vert" v={vel(vr)} warn={vr < 0} />
         <Mini l="Horiz" v={vel(vt)} />
-        <Mini l="Pitch" v={`${deg(pitch)}°`} />
-        <Mini l="AoA" v={`${deg(aoa)}°`} />
-        <Mini l="ω" v={`${deg(omega)}°/s`} />
-        <Mini l="Gimbal" v={`${deg(gimbal)}°`} />
-        {fins != null && <Mini l="Fins" v={`${deg(fins)}°`} />}
+        <Mini l="Pitch" v={`${deg(pitch)}\u00B0`} />
+        <Mini l="AoA" v={`${deg(aoa)}\u00B0`} />
+        <Mini l="\u03C9" v={`${deg(omega)}\u00B0/s`} />
+        <Mini l="Gimbal" v={`${deg(gimbal)}\u00B0`} />
+        {fins != null && <Mini l="Fins" v={`${deg(fins)}\u00B0`} />}
       </div>
     </div>
   )
@@ -367,32 +485,51 @@ function Mini({ l, v, warn }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.25, marginBottom: 1 }}>{l}</div>
-      <div style={{ fontSize: 13, fontFamily: "'SF Mono','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: warn ? 1 : 0.7, color: warn ? '#f87171' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div>
+      <div style={{
+        fontSize: 13, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
+        opacity: warn ? 1 : 0.7, color: warn ? '#f87171' : 'inherit',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>{v}</div>
     </div>
   )
 }
 
-/* ── Attitude (64px) ── */
+// ── Attitude indicator (64px) ──
+
 function Attitude({ angle }) {
   const s = 64, cx = 32, cy = 32, r = 27
   const tx = cx + Math.sin(-angle) * (r - 2), ty = cy - Math.cos(-angle) * (r - 2)
   const bx = cx - Math.sin(-angle) * (r * 0.5), by = cy + Math.cos(-angle) * (r * 0.5)
   const tick = (d) => {
     const a = d * Math.PI / 180
-    return { x1: cx + Math.sin(a) * (r - 1), y1: cy - Math.cos(a) * (r - 1), x2: cx + Math.sin(a) * (r + 3), y2: cy - Math.cos(a) * (r + 3) }
+    return {
+      x1: cx + Math.sin(a) * (r - 1), y1: cy - Math.cos(a) * (r - 1),
+      x2: cx + Math.sin(a) * (r + 3), y2: cy - Math.cos(a) * (r + 3),
+    }
   }
   return (
     <svg width={s} height={s} style={{ flexShrink: 0 }}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
       <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
-      {[0, 90, 180, 270].map(d => { const t = tick(d); return <line key={d} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} /> })}
+      {[0, 90, 180, 270].map(d => {
+        const t = tick(d)
+        return <line key={d} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} />
+      })}
       <line x1={bx} y1={by} x2={tx} y2={ty} stroke="#22d3ee" strokeWidth={2.5} strokeLinecap="round" />
       <circle cx={tx} cy={ty} r={2} fill="#22d3ee" />
     </svg>
   )
 }
 
-/* ── Engines (72px) ── */
+// ── Engine layout diagrams ──
+
+function ring(n, radius, dotR, fill, offset = 0) {
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2 + offset
+    return <circle key={i} cx={Math.cos(a) * radius} cy={Math.sin(a) * radius} r={dotR} fill={fill} />
+  })
+}
+
 function BoosterEngine({ on, phase }) {
   const inner = on, mid = on && (phase === 'boostback' || !phase), outer = on && !phase
   const hot = '#ff8800', off = 'rgba(255,255,255,0.06)'
@@ -415,11 +552,4 @@ function ShipEngine({ on }) {
       {ring(3, 4, 2.5, on ? '#ff8800' : off)}
     </svg>
   )
-}
-
-function ring(n, radius, dotR, fill, offset = 0) {
-  return Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2 + offset
-    return <circle key={i} cx={Math.cos(a) * radius} cy={Math.sin(a) * radius} r={dotR} fill={fill} />
-  })
 }

@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import EnginePlumes, { computeEnginePositions, BOOSTER_RINGS, SHIP_RINGS } from './ExhaustPlume'
+import { initModel } from './modelUtils'
 
 export default function Rocket({ simRef, groupRef }) {
   const { scene } = useGLTF('/models/starship-full.glb', true)
@@ -18,45 +19,10 @@ export default function Rocket({ simRef, groupRef }) {
     const root = innerRef.current
     if (!root) return
 
-    const gridFins = []
-    let boosterNode = null
+    const { gridFins, boosterNode, box2 } = initModel(root)
 
-    root.traverse((child) => {
-      if (child.isMesh) {
-        child.frustumCulled = false
-        child.castShadow = true
-        child.receiveShadow = true
-        if (child.material) {
-          child.material = child.material.clone()
-          child.material.side = THREE.DoubleSide
-          child.material.envMapIntensity = 0.8
-        }
-      }
-      if (child.name && child.name.includes('Gridfin')) {
-        gridFins.push(child)
-        child.userData.origQuat = child.quaternion.clone()
-      }
-      if (child.name && child.name.startsWith('Superheavy')) {
-        boosterNode = child
-      }
-    })
-
-    // Scale to 120m (reset first so effect is idempotent under StrictMode)
-    root.scale.set(1, 1, 1)
-    root.position.set(0, 0, 0)
-    root.rotation.set(0, 0, 0)
-    root.updateMatrixWorld(true)
-    const box = new THREE.Box3().setFromObject(root)
-    const height = box.max.y - box.min.y
-    root.scale.setScalar(120 / height)
-
-    root.updateMatrixWorld(true)
-    const box2 = new THREE.Box3().setFromObject(root)
+    // Anchor at ground level
     root.position.y = -box2.min.y
-    root.position.x = -(box2.min.x + box2.max.x) / 2
-    root.position.z = -(box2.min.z + box2.max.z) / 2
-    root.rotation.y = -Math.PI / 2
-
     baseRadiusRef.current = 4.5
 
     if (boosterNode) {
@@ -69,7 +35,6 @@ export default function Rocket({ simRef, groupRef }) {
     setModelReady(true)
   }, [])
 
-  // Only re-render when staging state actually changes (not every frame)
   useFrame(() => {
     const s = simRef.current
     const { gridFins, boosterNode } = partsRef.current
@@ -98,7 +63,6 @@ export default function Rocket({ simRef, groupRef }) {
     return computeEnginePositions(BOOSTER_RINGS.all, r)
   }, [separated, modelReady])
 
-  // Read sim state for plume props (EnginePlumes handles its own useFrame animation)
   const sim = simRef.current
   const plumeY = separated ? shipBaseYRef.current - 2 : -2
 

@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { useProgress } from '@react-three/drei'
 import Scene from './components/Scene'
 import HUD from './components/HUD'
-import { createInitialState } from './physics/index.js'
+import { createInitialState, SCENARIOS, applyScenario } from './physics/index.js'
 
 function LoadingOverlay() {
   const { progress, active } = useProgress()
@@ -12,11 +12,10 @@ function LoadingOverlay() {
   const maxProgress = useRef(0)
   const doneOnce = useRef(false)
 
-  // Only ever move the bar forward — never backwards
+  // Only ever move the bar forward
   if (progress > maxProgress.current) {
     maxProgress.current = progress
   }
-  // Once we hit 100 and loading stops, lock it
   if (progress >= 100 && !active) {
     maxProgress.current = 100
     doneOnce.current = true
@@ -32,7 +31,7 @@ function LoadingOverlay() {
       return () => clearTimeout(hideTimer)
     }, 400)
     return () => clearTimeout(timer)
-  }, [displayProgress >= 100 && !active])
+  }, [progress, active])
 
   if (!visible) return null
 
@@ -99,11 +98,19 @@ function LoadingOverlay() {
 export default function App() {
   const [phase, setPhase] = useState('idle')
   const [cameraTarget, setCameraTarget] = useState('ground')
-  const simRef = useRef(createInitialState())
+  const [scenario, setScenario] = useState('ift5')
+  const simRef = useRef(applyScenario(createInitialState(), 'ift5'))
   const timeScaleRef = useRef(1)
 
   const handleLaunch = useCallback(() => {
-    setPhase('launching')
+    const s = simRef.current
+    // For pre-staged scenarios, jump straight to staged phase
+    if (s.staged && s.phase === 'staged') {
+      setPhase('staged')
+      setCameraTarget('booster')
+    } else {
+      setPhase('launching')
+    }
   }, [])
 
   const handleStop = useCallback(() => {
@@ -113,8 +120,9 @@ export default function App() {
   const handleReset = useCallback(() => {
     setPhase('idle')
     setCameraTarget('ground')
-    simRef.current = createInitialState()
-  }, [])
+    timeScaleRef.current = 1
+    simRef.current = applyScenario(createInitialState(), scenario)
+  }, [scenario])
 
   const handleToggleCamera = useCallback(() => {
     setCameraTarget(prev => {
@@ -140,6 +148,14 @@ export default function App() {
     setPhase('staged')
   }, [])
 
+  const handleScenarioChange = useCallback((id) => {
+    setScenario(id)
+    setPhase('idle')
+    setCameraTarget('ground')
+    timeScaleRef.current = 1
+    simRef.current = applyScenario(createInitialState(), id)
+  }, [])
+
   return (
     <div className="w-full h-screen bg-black relative">
       <Canvas
@@ -148,7 +164,6 @@ export default function App() {
         shadows
       >
         <color attach="background" args={['#a0d2f0']} />
-        {/* Lighting managed by SunLight in Scene */}
         <Scene
           phase={phase}
           simRef={simRef}
@@ -166,11 +181,13 @@ export default function App() {
         simRef={simRef}
         timeScaleRef={timeScaleRef}
         cameraTarget={cameraTarget}
+        scenario={scenario}
         onLaunch={handleLaunch}
         onStop={handleStop}
         onReset={handleReset}
         onToggleCamera={handleToggleCamera}
         onSetCamera={setCameraTarget}
+        onScenarioChange={handleScenarioChange}
       />
     </div>
   )
