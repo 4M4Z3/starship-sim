@@ -50,9 +50,9 @@ export const SHIP_RINGS = [
 
 // Plume visual layers
 const LAYER_DEFS = [
-  { rScale: 1.2,  hScale: 30.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
-  { rScale: 2.0,  hScale: 45.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
-  { rScale: 3.0,  hScale: 60.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
+  { rScale: 1.5,  hScale: 36.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
+  { rScale: 2.5,  hScale: 54.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
+  { rScale: 3.5,  hScale: 72.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
 ]
 
 const _matrix = new THREE.Matrix4()
@@ -91,7 +91,23 @@ export default function EnginePlumes({ engines, altitude = 0, throttle = 1, visi
   , [])
 
   useFrame(() => {
-    if (!visible || count === 0) return
+    if (count === 0) return
+
+    // Hide plumes by zeroing scale when not visible
+    if (!visible) {
+      for (let li = 0; li < LAYER_DEFS.length; li++) {
+        const mesh = layerRefs.current[li]
+        if (!mesh) continue
+        for (let ei = 0; ei < count; ei++) {
+          _scale.set(0, 0, 0)
+          _matrix.compose(_pos, _quat, _scale)
+          mesh.setMatrixAt(ei, _matrix)
+        }
+        mesh.instanceMatrix.needsUpdate = true
+      }
+      if (lightRef.current) lightRef.current.intensity = 0
+      return
+    }
 
     const t = performance.now() * 0.001
     const vacFactor = Math.min(1, Math.max(0, (altitude - 20000) / 60000))
@@ -136,7 +152,7 @@ export default function EnginePlumes({ engines, altitude = 0, throttle = 1, visi
     }
   })
 
-  if (!visible || count === 0) return null
+  if (count === 0) return null
 
   return (
     <group position={[0, yOffset, 0]}>
