@@ -21,7 +21,7 @@ const BOOSTER_HEIGHT = 71
 const BOOSTER_CENTER = 15       // near base of booster
 
 // How much of the screen height the rocket should fill (0.0–1.0)
-const FILL_FRACTION = 0.7
+const FILL_FRACTION = 0.4
 
 // Reusable vectors to avoid per-frame allocations
 const _earthCenter = new THREE.Vector3()
