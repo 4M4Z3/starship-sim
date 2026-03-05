@@ -1,0 +1,335 @@
+import { useRef, useMemo, useEffect, useCallback } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+
+const EARTH_RADIUS = 6_371_000
+
+// Launch site: SpaceX Starbase, Boca Chica TX
+const LAUNCH_LAT = 25.99622065480988 * (Math.PI / 180)
+const LAUNCH_LON = -97.15443150451574 * (Math.PI / 180)
+
+// Tile definitions: 4×2 grid covering the globe
+// A1 contains the launch site (Boca Chica) — uses higher tessellation so the
+// mesh surface stays close to the true sphere and the launchpad doesn't float.
+const TILES = [
+  { id: 'A1', lonMin: -180, lonMax: -90, latMin: 0, latMax: 90, segs: 512 },
+  { id: 'B1', lonMin: -90,  lonMax: 0,   latMin: 0, latMax: 90 },
+  { id: 'C1', lonMin: 0,    lonMax: 90,  latMin: 0, latMax: 90 },
+  { id: 'D1', lonMin: 90,   lonMax: 180, latMin: 0, latMax: 90 },
+  { id: 'A2', lonMin: -180, lonMax: -90, latMin: -90, latMax: 0 },
+  { id: 'B2', lonMin: -90,  lonMax: 0,   latMin: -90, latMax: 0 },
+  { id: 'C2', lonMin: 0,    lonMax: 90,  latMin: -90, latMax: 0 },
+  { id: 'D2', lonMin: 90,   lonMax: 180, latMin: -90, latMax: 0 },
+]
+
+const DEG2RAD = Math.PI / 180
+const SEGS = 64
+const OVERLAP = 0.05 * DEG2RAD
+
+// High-res overlay around Starbase (covers ~6km × 6km)
+// User can drop a satellite screenshot at /textures/tiles/boca_chica.jpg
+const OVERLAY = {
+  latCenter: 25.9968,
+  lonCenter: -97.1544,
+  halfSpanDeg: 0.03, // ~3.3km in each direction
+  segs: 128, // high detail mesh
+}
+
+function createSegmentGeometry(lonMinDeg, lonMaxDeg, latMinDeg, latMaxDeg, segs = SEGS) {
+  const lonMin = lonMinDeg * DEG2RAD - OVERLAP
+  const lonMax = lonMaxDeg * DEG2RAD + OVERLAP
+  const latMin = latMinDeg * DEG2RAD - OVERLAP
+  const latMax = latMaxDeg * DEG2RAD + OVERLAP
+
+  const positions = []
+  const normals = []
+  const uvs = []
+  const indices = []
+
+  for (let j = 0; j <= segs; j++) {
+    const v = j / segs
+    const lat = latMax - v * (latMax - latMin)
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs
+      const lon = lonMin + u * (lonMax - lonMin)
+
+      const x = -EARTH_RADIUS * Math.cos(lat) * Math.sin(lon)
+      const y = EARTH_RADIUS * Math.sin(lat)
+      const z = -EARTH_RADIUS * Math.cos(lat) * Math.cos(lon)
+
+      positions.push(x, y, z)
+      const len = Math.sqrt(x * x + y * y + z * z)
+      normals.push(x / len, y / len, z / len)
+      uvs.push(u, 1 - v)
+    }
+  }
+
+  for (let j = 0; j < segs; j++) {
+    for (let i = 0; i < segs; i++) {
+      const a = j * (segs + 1) + i
+      const b = a + 1
+      const c = a + (segs + 1)
+      const d = c + 1
+      indices.push(a, c, b, b, c, d)
+    }
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setIndex(indices)
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  return geo
+}
+
+function tileCenterNormal(tile) {
+  const lat = ((tile.latMin + tile.latMax) / 2) * DEG2RAD
+  const lon = ((tile.lonMin + tile.lonMax) / 2) * DEG2RAD
+  return new THREE.Vector3(
+    -Math.cos(lat) * Math.sin(lon),
+    Math.sin(lat),
+    -Math.cos(lat) * Math.cos(lon)
+  ).normalize()
+}
+
+const loader = new THREE.TextureLoader()
+
+export default function TiledEarth() {
+  const atmosRef = useRef()
+  const materialsRef = useRef({})
+  const texturesRef = useRef({})
+  const loadingRef = useRef({})
+  const groupRef = useRef()
+
+  // Rotation: place Boca Chica at Y+ (top of sphere)
+  const rotationQuat = useMemo(() => {
+    const x = -Math.cos(LAUNCH_LAT) * Math.sin(LAUNCH_LON)
+    const y = Math.sin(LAUNCH_LAT)
+    const z = -Math.cos(LAUNCH_LAT) * Math.cos(LAUNCH_LON)
+    const launchDir = new THREE.Vector3(x, y, z).normalize()
+    return new THREE.Quaternion().setFromUnitVectors(launchDir, new THREE.Vector3(0, 1, 0))
+  }, [])
+
+  const rotation = useMemo(() => new THREE.Euler().setFromQuaternion(rotationQuat), [rotationQuat])
+
+  // Pre-compute geometries and center normals
+  const { geometries, centerNormals } = useMemo(() => {
+    const geos = {}
+    const normals = {}
+    for (const tile of TILES) {
+      geos[tile.id] = createSegmentGeometry(tile.lonMin, tile.lonMax, tile.latMin, tile.latMax, tile.segs)
+      normals[tile.id] = tileCenterNormal(tile).applyQuaternion(rotationQuat)
+    }
+    return { geometries: geos, centerNormals: normals }
+  }, [rotationQuat])
+
+  // High-res overlay geometry for Boca Chica area
+  const overlayGeo = useMemo(() => {
+    const { latCenter, lonCenter, halfSpanDeg, segs } = OVERLAY
+    return createSegmentGeometry(
+      lonCenter - halfSpanDeg, lonCenter + halfSpanDeg,
+      latCenter - halfSpanDeg, latCenter + halfSpanDeg,
+    )
+  }, [])
+  const overlayMatRef = useRef()
+  const overlayLoadedRef = useRef(false)
+
+  const loadTile = useCallback((id) => {
+    if (texturesRef.current[id] || loadingRef.current[id]) return
+    loadingRef.current[id] = true
+    loader.loadAsync(`/textures/tiles/blue_marble_${id}.jpg`).then((tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 16
+      tex.minFilter = THREE.LinearMipmapLinearFilter
+      tex.magFilter = THREE.LinearFilter
+      texturesRef.current[id] = tex
+      loadingRef.current[id] = false
+      const mat = materialsRef.current[id]
+      if (mat) {
+        mat.map = tex
+        mat.color.set('#ffffff')
+        mat.needsUpdate = true
+      }
+    }).catch((err) => {
+      console.error(`[TiledEarth] Failed to load tile ${id}:`, err)
+      loadingRef.current[id] = false
+    })
+  }, [])
+
+  const unloadTile = useCallback((id) => {
+    if (texturesRef.current[id]) {
+      texturesRef.current[id].dispose()
+      texturesRef.current[id] = null
+      const mat = materialsRef.current[id]
+      if (mat) {
+        mat.map = null
+        mat.color.set('#0a1a3a')
+        mat.needsUpdate = true
+      }
+    }
+  }, [])
+
+  // Eager-load launch site tiles + overlay
+  useEffect(() => {
+    loadTile('A1')
+    loadTile('B1')
+    // Try loading high-res Boca Chica overlay (optional — won't error if missing)
+    if (!overlayLoadedRef.current) {
+      loader.loadAsync('/textures/tiles/boca_chica.jpg').then((tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.anisotropy = 16
+        tex.minFilter = THREE.LinearMipmapLinearFilter
+        tex.magFilter = THREE.LinearFilter
+        overlayLoadedRef.current = true
+        if (overlayMatRef.current) {
+          overlayMatRef.current.map = tex
+          overlayMatRef.current.color.set('#ffffff')
+          overlayMatRef.current.needsUpdate = true
+        }
+      }).catch(() => {
+        // No overlay image — that's fine, it's optional
+      })
+    }
+    return () => {
+      for (const id of Object.keys(texturesRef.current)) {
+        if (texturesRef.current[id]) texturesRef.current[id].dispose()
+      }
+    }
+  }, [loadTile])
+
+  const { camera } = useThree()
+  const tempVec = useMemo(() => new THREE.Vector3(), [])
+
+  useFrame(() => {
+    if (groupRef.current) groupRef.current.visible = true
+
+    // Compute camera altitude for atmosphere/overlay fading
+    const earthCenter = new THREE.Vector3(0, -EARTH_RADIUS, 0)
+    if (groupRef.current?.parent) {
+      // Earth center in world space (shifted by floating origin)
+      const parentPos = groupRef.current.parent.position
+      earthCenter.set(parentPos.x, parentPos.y - EARTH_RADIUS, parentPos.z)
+    }
+    const camAlt = camera.position.distanceTo(earthCenter) - EARTH_RADIUS
+
+    // Atmosphere — visible from ground (subtle) and increasingly bright from space
+    if (atmosRef.current) {
+      atmosRef.current.visible = true
+      const opacity = camAlt < 500
+        ? 0.2
+        : camAlt < 10000
+          ? THREE.MathUtils.lerp(0.2, 0.5, (camAlt - 500) / 9500)
+          : Math.min(1.0, 0.5 + THREE.MathUtils.smoothstep(camAlt, 10000, 80000) * 0.5)
+      atmosRef.current.material.uniforms.uOpacity.value = opacity
+    }
+
+    // Camera direction for tile visibility
+    const tileCenter = new THREE.Vector3(0, -EARTH_RADIUS, 0)
+    if (groupRef.current?.parent) {
+      tempVec.copy(camera.position)
+      groupRef.current.parent.worldToLocal(tempVec)
+      tempVec.sub(tileCenter).normalize()
+    }
+
+    for (const tile of TILES) {
+      const dot = tempVec.dot(centerNormals[tile.id])
+      if (dot > -0.1) {
+        loadTile(tile.id)
+      } else if (dot < -0.3) {
+        unloadTile(tile.id)
+      }
+    }
+
+    // Fade in overlay when close to ground (< 50km), fully visible below 10km
+    if (overlayMatRef.current && overlayLoadedRef.current) {
+      const overlayOpacity = camAlt < 10000
+        ? 1.0
+        : camAlt < 50000
+          ? 1.0 - (camAlt - 10000) / 40000
+          : 0.0
+      overlayMatRef.current.opacity = overlayOpacity
+      overlayMatRef.current.visible = overlayOpacity > 0.01
+    }
+  })
+
+  return (
+    <group>
+      {/* Earth tile segments */}
+      <group ref={groupRef} position={[0, -EARTH_RADIUS, 0]} rotation={rotation}>
+        {TILES.map(tile => (
+          <mesh key={tile.id} geometry={geometries[tile.id]} renderOrder={0}>
+            <meshStandardMaterial
+              ref={r => { if (r) materialsRef.current[tile.id] = r }}
+              color="#0a1a3a"
+              roughness={1}
+              metalness={0}
+              depthWrite
+              polygonOffset
+              polygonOffsetFactor={1}
+              polygonOffsetUnits={1}
+            />
+          </mesh>
+        ))}
+
+        {/* High-res Boca Chica overlay — renders on top of base tiles */}
+        <mesh geometry={overlayGeo} renderOrder={1}>
+          <meshStandardMaterial
+            ref={overlayMatRef}
+            color="#0a1a3a"
+            roughness={1}
+            metalness={0}
+            transparent
+            depthWrite
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+            visible={false}
+          />
+        </mesh>
+      </group>
+
+      {/* Atmosphere glow — thin bright rim visible from space */}
+      <mesh
+        ref={atmosRef}
+        position={[0, -EARTH_RADIUS, 0]}
+        rotation={rotation}
+        renderOrder={-1}
+        visible={false}
+      >
+        <sphereGeometry args={[EARTH_RADIUS + 80000, 64, 32]} />
+        <shaderMaterial
+          transparent
+          depthWrite={false}
+          side={THREE.BackSide}
+          uniforms={{ uOpacity: { value: 0 } }}
+          vertexShader={`
+            varying vec3 vNormal;
+            varying vec3 vViewDir;
+            void main() {
+              vec4 worldPos = modelMatrix * vec4(position, 1.0);
+              vNormal = normalize(normalMatrix * normal);
+              vViewDir = normalize(cameraPosition - worldPos.xyz);
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `}
+          fragmentShader={`
+            uniform float uOpacity;
+            varying vec3 vNormal;
+            varying vec3 vViewDir;
+            void main() {
+              float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
+              // Sharp bright rim at the edge, soft inner glow
+              float rim = pow(fresnel, 2.0);
+              float core = pow(fresnel, 5.0) * 0.5;
+              vec3 rimColor = vec3(0.4, 0.7, 1.0);
+              vec3 coreColor = vec3(0.6, 0.85, 1.0);
+              vec3 color = rimColor * rim + coreColor * core;
+              float alpha = (rim * 0.8 + core) * uOpacity;
+              gl_FragColor = vec4(color, alpha);
+            }
+          `}
+        />
+      </mesh>
+    </group>
+  )
+}
