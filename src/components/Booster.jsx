@@ -103,10 +103,6 @@ export default function Booster({ simRef, groupRef }) {
     return []
   }, [boosterPhase, modelReady])
 
-  const sim = simRef.current
-  const enginesOn = boosterPhase === 'boostback' || boosterPhase === 'landing' || boosterPhase === 'hover'
-  const altitude = sim.staged ? (sim.boosterR - EARTH_RADIUS) : sim.altitude
-
   return (
     <group ref={groupRef}>
       <group ref={modelRef}>
@@ -115,9 +111,13 @@ export default function Booster({ simRef, groupRef }) {
         </group>
         <EnginePlumes
           engines={engines}
-          visible={enginesOn}
-          throttle={1}
-          altitude={altitude}
+          simRef={simRef}
+          isVisible={s => {
+            const bp = s.boosterPhase
+            return bp === 'boostback' || bp === 'landing' || bp === 'hover'
+          }}
+          getThrottle={() => 1}
+          getAltitude={s => s.staged ? (s.boosterR - EARTH_RADIUS) : s.altitude}
           baseScale={boosterPhase === 'landing' || boosterPhase === 'hover' ? 0.6 : 0.85}
         />
       </group>

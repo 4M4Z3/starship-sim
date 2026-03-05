@@ -50,9 +50,9 @@ export const SHIP_RINGS = [
 
 // Plume visual layers
 const LAYER_DEFS = [
-  { rScale: 1.5,  hScale: 36.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
-  { rScale: 2.5,  hScale: 54.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
-  { rScale: 3.5,  hScale: 72.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
+  { rScale: 2.0,  hScale: 45.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
+  { rScale: 3.2,  hScale: 65.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
+  { rScale: 4.5,  hScale: 85.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
 ]
 
 const _matrix = new THREE.Matrix4()
@@ -67,12 +67,13 @@ const coneGeo = new THREE.ConeGeometry(1, 1, 10)
  *
  * Props:
  *   engines    — array of {x, z, scale} in model coordinates
- *   altitude   — current altitude in meters (for vacuum expansion)
- *   throttle   — 0..1
- *   visible    — boolean
+ *   simRef     — ref to sim state (reads enginesOn, thrustForce, altitude each frame)
+ *   isVisible  — function(sim) => boolean, checked each frame
+ *   getThrottle — function(sim) => 0..1, checked each frame
+ *   getAltitude — function(sim) => meters, checked each frame
  *   baseScale  — overall size multiplier (default 1)
  */
-export default function EnginePlumes({ engines, altitude = 0, throttle = 1, visible = true, baseScale = 1, yOffset = -2 }) {
+export default function EnginePlumes({ engines, simRef, isVisible, getThrottle, getAltitude, baseScale = 1, yOffset = -2 }) {
   const layerRefs = useRef([])
   const lightRef = useRef()
 
@@ -93,8 +94,13 @@ export default function EnginePlumes({ engines, altitude = 0, throttle = 1, visi
   useFrame(() => {
     if (count === 0) return
 
+    const sim = simRef?.current
+    const visible = sim ? isVisible(sim) : false
+    const throttle = sim ? getThrottle(sim) : 0
+    const altitude = sim ? getAltitude(sim) : 0
+
     // Hide plumes by zeroing scale when not visible
-    if (!visible) {
+    if (!visible || throttle === 0) {
       for (let li = 0; li < LAYER_DEFS.length; li++) {
         const mesh = layerRefs.current[li]
         if (!mesh) continue
@@ -104,6 +110,7 @@ export default function EnginePlumes({ engines, altitude = 0, throttle = 1, visi
           mesh.setMatrixAt(ei, _matrix)
         }
         mesh.instanceMatrix.needsUpdate = true
+        mesh.material.opacity = 0
       }
       if (lightRef.current) lightRef.current.intensity = 0
       return

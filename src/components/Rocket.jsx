@@ -63,7 +63,6 @@ export default function Rocket({ simRef, groupRef }) {
     return computeEnginePositions(BOOSTER_RINGS.all, r)
   }, [separated, modelReady])
 
-  const sim = simRef.current
   const plumeY = separated ? shipBaseYRef.current - 2 : -2
 
   return (
@@ -73,9 +72,10 @@ export default function Rocket({ simRef, groupRef }) {
       </group>
       <EnginePlumes
         engines={engines}
-        visible={sim.enginesOn}
-        throttle={sim.thrustForce > 0 ? 1 : 0}
-        altitude={sim.altitude}
+        simRef={simRef}
+        isVisible={s => s.enginesOn}
+        getThrottle={s => s.thrustForce > 0 ? 1 : 0}
+        getAltitude={s => s.altitude}
         baseScale={separated ? 0.7 : 1.0}
         yOffset={plumeY}
       />
