@@ -9,19 +9,19 @@ const CAMERA_KEYS = { Ground: 'ground', Ship: 'ship', Booster: 'booster' }
 
 const panelStyle = {
   background: 'rgba(10, 12, 18, 0.85)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
   border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 16,
+  borderRadius: 10,
 }
 
 const btnBase = {
   pointerEvents: 'auto',
   cursor: 'pointer',
   border: 'none',
-  borderRadius: 12,
-  padding: '12px 20px',
-  fontSize: 15,
+  borderRadius: 7,
+  padding: '6px 12px',
+  fontSize: 11,
   fontWeight: 500,
   fontFamily: 'inherit',
   color: 'rgba(255,255,255,0.45)',
@@ -116,7 +116,7 @@ function Callout({ show, children }) {
       transform: 'translate(-50%,-50%)', zIndex: 20,
       transition: 'opacity 0.5s', opacity, textAlign: 'center',
     }}>
-      <div style={{ ...panelStyle, padding: '28px 48px' }}>{children}</div>
+      <div style={{ ...panelStyle, padding: '16px 32px' }}>{children}</div>
     </div>
   )
 }
@@ -200,26 +200,26 @@ export default function HUD({
     }}>
 
       {/* ═══ TOP: status bar ═══ */}
-      <div style={{ position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)' }}>
-        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 20, padding: '14px 32px' }}>
-          <StatusDot color={PHASE_COLORS[phase]} />
-          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>
+      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)' }}>
+        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 10, padding: '7px 18px' }}>
+          <StatusDot color={PHASE_COLORS[phase]} size={8} />
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>
             {PHASE_LABELS[phase] || phase}
           </span>
-          <span style={{ opacity: 0.15, fontSize: 18 }}>|</span>
-          <span style={{ fontSize: 15, opacity: 0.45, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ opacity: 0.15, fontSize: 12 }}>|</span>
+          <span style={{ fontSize: 10, opacity: 0.45, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
             {tmr(tel.missionTime)}
           </span>
         </div>
       </div>
 
       {/* ═══ BOTTOM: controls ═══ */}
-      <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)' }}>
-        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 6, padding: 8 }}>
+      <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)' }}>
+        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 3, padding: 4 }}>
           <Btn onClick={slower}>{'\u2212'}</Btn>
           <span style={{
-            fontSize: 15, fontWeight: 600, fontFamily: MONO,
-            fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'center',
+            fontSize: 10, fontWeight: 600, fontFamily: MONO,
+            fontVariantNumeric: 'tabular-nums', width: 32, textAlign: 'center',
             color: ts > 1 ? '#facc15' : 'rgba(255,255,255,0.4)',
           }}>{ts}x</span>
           <Btn onClick={faster}>+</Btn>
@@ -234,11 +234,11 @@ export default function HUD({
 
       {/* ═══ LEFT: flight data ═══ */}
       <div style={{
-        position: 'absolute', top: 20, left: 20,
-        ...panelStyle, padding: '20px 24px', width: 230,
-        maxHeight: 'calc(100vh - 110px)', overflowY: 'auto', pointerEvents: 'auto',
+        position: 'absolute', top: 12, left: 12,
+        ...panelStyle, padding: '12px 14px', width: 170,
+        maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', pointerEvents: 'auto',
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <Row l="Thrust" v={`${fmt(tel.thrustForce)} N`} />
           <Row l="Drag" v={`${fmt(tel.dragForce)} N`} />
           <Row l="Mach" v={(tel.mach ?? 0).toFixed(2)} />
@@ -263,8 +263,8 @@ export default function HUD({
           <button
             onClick={() => setShowAdvanced(p => !p)}
             style={{
-              ...btnBase, width: '100%', padding: '8px 0',
-              fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase',
+              ...btnBase, width: '100%', padding: '4px 0',
+              fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase',
               textAlign: 'center', opacity: 0.35,
             }}
           >
@@ -272,7 +272,7 @@ export default function HUD({
           </button>
 
           {showAdvanced && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 7 }}>
               <Row l="Total Mass" v={`${fmt(tel.totalMass)} kg`} />
               <Row l="Thrust Accel" v={`${(tel.thrustAccel ?? 0).toFixed(2)} m/s\u00B2`} />
               <Row l="Drag Accel" v={`${(tel.dragAccel ?? 0).toFixed(2)} m/s\u00B2`} />
@@ -295,30 +295,30 @@ export default function HUD({
             <button
               onClick={() => setShowScenarios(p => !p)}
               style={{
-                ...btnBase, width: '100%', padding: '8px 0',
-                fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase',
+                ...btnBase, width: '100%', padding: '4px 0',
+                fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase',
                 textAlign: 'center', opacity: 0.35,
               }}
             >
               {showScenarios ? '\u25BE Mission' : '\u25B8 Mission'}
             </button>
             {showScenarios && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
                 {Object.entries(SCENARIOS).map(([id, s]) => (
                   <button
                     key={id}
                     onClick={() => { onScenarioChange(id); setShowScenarios(false) }}
                     style={{
                       ...btnBase,
-                      padding: '8px 12px',
+                      padding: '5px 8px',
                       textAlign: 'left',
-                      borderRadius: 8,
+                      borderRadius: 6,
                       background: scenario === id ? 'rgba(34,211,238,0.12)' : 'transparent',
                       color: scenario === id ? '#22d3ee' : 'rgba(255,255,255,0.5)',
                     }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</div>
-                    <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2 }}>{s.description}</div>
+                    <div style={{ fontSize: 10, fontWeight: 600 }}>{s.name}</div>
+                    <div style={{ fontSize: 8, opacity: 0.5, marginTop: 1 }}>{s.description}</div>
                   </button>
                 ))}
               </div>
@@ -328,7 +328,7 @@ export default function HUD({
       </div>
 
       {/* ═══ RIGHT: vehicles ═══ */}
-      <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', flexDirection: 'column', gap: 12, width: 270 }}>
+      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 8, width: 195 }}>
         <Vehicle
           name="Starship" active={!tel.staged || cameraTarget === 'ship'}
           alt={tel.altitude} spd={tel.speed} vr={tel.vr} vt={tel.vt}
@@ -349,19 +349,19 @@ export default function HUD({
 
       {/* ═══ CALLOUTS ═══ */}
       <Callout show={showStaged}>
-        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', color: '#22d3ee' }}>Stage Separation</div>
-        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>Ship engines ignited</div>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', color: '#22d3ee' }}>Stage Separation</div>
+        <div style={{ fontSize: 10, opacity: 0.4, marginTop: 4 }}>Ship engines ignited</div>
       </Callout>
       <Callout show={showOrbit}>
-        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', color: '#4ade80' }}>Orbit Achieved</div>
-        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>{dist(tel.apoapsis)} × {dist(tel.periapsis)}</div>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', color: '#4ade80' }}>Orbit Achieved</div>
+        <div style={{ fontSize: 10, opacity: 0.4, marginTop: 4 }}>{dist(tel.apoapsis)} × {dist(tel.periapsis)}</div>
       </Callout>
       <Callout show={phase === 'landed'}>
-        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.9 }}>Touchdown</div>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>Touchdown</div>
       </Callout>
       <Callout show={phase === 'fuel_exhausted'}>
-        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.9 }}>SECO</div>
-        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>Ballistic trajectory</div>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>SECO</div>
+        <div style={{ fontSize: 10, opacity: 0.4, marginTop: 4 }}>Ballistic trajectory</div>
       </Callout>
     </div>
   )
@@ -371,7 +371,7 @@ export default function HUD({
 // Reusable sub-components
 // ══════════════════════════════════════
 
-function StatusDot({ color, size = 12 }) {
+function StatusDot({ color, size = 8 }) {
   return <svg width={size} height={size}><circle cx={size / 2} cy={size / 2} r={size / 2} fill={color} /></svg>
 }
 
@@ -397,15 +397,15 @@ function Btn({ children, onClick, active, accent }) {
 }
 
 function Sep() {
-  return <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)', margin: '0 8px' }} />
+  return <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
 }
 
 function Section({ children }) {
   return (
     <div style={{
-      marginTop: 16, paddingTop: 14,
+      marginTop: 10, paddingTop: 8,
       borderTop: '1px solid rgba(255,255,255,0.06)',
-      display: 'flex', flexDirection: 'column', gap: 12,
+      display: 'flex', flexDirection: 'column', gap: 7,
     }}>
       {children}
     </div>
@@ -415,9 +415,9 @@ function Section({ children }) {
 function Row({ l, v, warn }) {
   return (
     <div>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3, marginBottom: 2 }}>{l}</div>
+      <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.3, marginBottom: 1 }}>{l}</div>
       <div style={{
-        fontSize: 15, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
+        fontSize: 11, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
         opacity: warn ? 1 : 0.8, color: warn ? '#f87171' : 'inherit',
       }}>{v}</div>
     </div>
@@ -428,14 +428,14 @@ function Fuel({ label, pct }) {
   const c = pct > 20 ? '#4ade80' : pct > 5 ? '#facc15' : '#f87171'
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <StatusDot color={c} size={8} />
-          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <StatusDot color={c} size={5} />
+          <span style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.3 }}>{label}</span>
         </div>
-        <span style={{ fontSize: 12, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', opacity: 0.4 }}>{pct.toFixed(0)}%</span>
+        <span style={{ fontSize: 9, fontFamily: MONO, fontVariantNumeric: 'tabular-nums', opacity: 0.4 }}>{pct.toFixed(0)}%</span>
       </div>
-      <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+      <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
         <div style={{ height: '100%', borderRadius: 2, background: 'rgba(255,255,255,0.25)', width: `${pct}%`, transition: 'width 0.15s' }} />
       </div>
     </div>
@@ -447,26 +447,26 @@ function Fuel({ label, pct }) {
 function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitch, aoa, omega, gimbal, fins, angle, engine }) {
   return (
     <div style={{
-      ...panelStyle, padding: '20px 22px',
+      ...panelStyle, padding: '10px 12px',
       opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.3s',
-      borderLeft: active ? '3px solid rgba(34,211,238,0.4)' : '3px solid transparent',
+      borderLeft: active ? '2px solid rgba(34,211,238,0.4)' : '2px solid transparent',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 }}>{name}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.8 }}>{name}</span>
         {badge && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <StatusDot color={badgeDot} size={7} />
-            <span style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.4 }}>{badge}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <StatusDot color={badgeDot} size={5} />
+            <span style={{ fontSize: 8, textTransform: 'uppercase', opacity: 0.4 }}>{badge}</span>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '16px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, margin: '8px 0' }}>
         <Attitude angle={angle} />
         {engine}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
         <Mini l="Alt" v={dist(alt)} />
         <Mini l="Speed" v={vel(spd)} />
         <Mini l="Vert" v={vel(vr)} warn={vr < 0} />
@@ -484,9 +484,9 @@ function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitc
 function Mini({ l, v, warn }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.25, marginBottom: 1 }}>{l}</div>
+      <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.25, marginBottom: 1 }}>{l}</div>
       <div style={{
-        fontSize: 13, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
+        fontSize: 10, fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
         opacity: warn ? 1 : 0.7, color: warn ? '#f87171' : 'inherit',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>{v}</div>
@@ -494,17 +494,17 @@ function Mini({ l, v, warn }) {
   )
 }
 
-// ── Attitude indicator (64px) ──
+// ── Attitude indicator (40px) ──
 
 function Attitude({ angle }) {
-  const s = 64, cx = 32, cy = 32, r = 27
+  const s = 40, cx = 20, cy = 20, r = 17
   const tx = cx + Math.sin(-angle) * (r - 2), ty = cy - Math.cos(-angle) * (r - 2)
   const bx = cx - Math.sin(-angle) * (r * 0.5), by = cy + Math.cos(-angle) * (r * 0.5)
   const tick = (d) => {
     const a = d * Math.PI / 180
     return {
       x1: cx + Math.sin(a) * (r - 1), y1: cy - Math.cos(a) * (r - 1),
-      x2: cx + Math.sin(a) * (r + 3), y2: cy - Math.cos(a) * (r + 3),
+      x2: cx + Math.sin(a) * (r + 2), y2: cy - Math.cos(a) * (r + 2),
     }
   }
   return (
@@ -515,8 +515,8 @@ function Attitude({ angle }) {
         const t = tick(d)
         return <line key={d} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} />
       })}
-      <line x1={bx} y1={by} x2={tx} y2={ty} stroke="#22d3ee" strokeWidth={2.5} strokeLinecap="round" />
-      <circle cx={tx} cy={ty} r={2} fill="#22d3ee" />
+      <line x1={bx} y1={by} x2={tx} y2={ty} stroke="#22d3ee" strokeWidth={2} strokeLinecap="round" />
+      <circle cx={tx} cy={ty} r={1.5} fill="#22d3ee" />
     </svg>
   )
 }
@@ -534,7 +534,7 @@ function BoosterEngine({ on, phase }) {
   const inner = on, mid = on && (phase === 'boostback' || !phase), outer = on && !phase
   const hot = '#ff8800', off = 'rgba(255,255,255,0.06)'
   return (
-    <svg width="72" height="72" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
+    <svg width="40" height="40" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
       {on && <circle cx={0} cy={0} r={15} fill="none" stroke="rgba(255,136,0,0.12)" strokeWidth={1.5} />}
       {ring(20, 13.5, 1.4, outer ? hot : off)}
       {ring(10, 8.5, 1.7, mid ? hot : off)}
@@ -546,7 +546,7 @@ function BoosterEngine({ on, phase }) {
 function ShipEngine({ on }) {
   const hot = '#4488ff', off = 'rgba(255,255,255,0.06)'
   return (
-    <svg width="72" height="72" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
+    <svg width="40" height="40" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
       {on && <circle cx={0} cy={0} r={14} fill="none" stroke="rgba(68,136,255,0.12)" strokeWidth={1.5} />}
       {ring(3, 10, 3.5, on ? hot : off, -Math.PI / 2)}
       {ring(3, 4, 2.5, on ? '#ff8800' : off)}

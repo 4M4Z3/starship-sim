@@ -35,7 +35,7 @@ export default function OrbitControls({ rocketRef, boosterRef, worldOffsetRef, c
   const { camera, gl, scene } = useThree()
   const theta = useRef(Math.PI * 0.25)
   const phi = useRef(Math.PI * 0.35)
-  const distance = useRef(400)
+  const distance = useRef(600)
   const isDragging = useRef(false)
   const prevMode = useRef(cameraMode)
   const currentFov = useRef(10) // start tight for ground camera
@@ -47,7 +47,7 @@ export default function OrbitControls({ rocketRef, boosterRef, worldOffsetRef, c
   useEffect(() => {
     if (prevMode.current !== cameraMode) {
       if (cameraMode !== 'ground') {
-        distance.current = 400
+        distance.current = 600
         theta.current = Math.PI * 0.25
         phi.current = Math.PI * 0.35
         currentFov.current = ORBIT_FOV
