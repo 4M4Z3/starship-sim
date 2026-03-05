@@ -9,7 +9,7 @@ const MIN_DISTANCE = 50
 const BASE_MAX_DISTANCE = 2000
 
 // Ground camera: fixed position near launchpad, telephoto lens tracking the rocket
-const GROUND_CAM_OFFSET = new THREE.Vector3(-400, 5, 800)
+const GROUND_CAM_OFFSET = new THREE.Vector3(-600, 8, 1200)
 const ORBIT_FOV = 50
 
 // Known vehicle dimensions (meters)
@@ -35,7 +35,7 @@ export default function OrbitControls({ rocketRef, boosterRef, worldOffsetRef, c
   const { camera, gl, scene } = useThree()
   const theta = useRef(Math.PI * 0.25)
   const phi = useRef(Math.PI * 0.35)
-  const distance = useRef(600)
+  const distance = useRef(800)
   const isDragging = useRef(false)
   const prevMode = useRef(cameraMode)
   const currentFov = useRef(10) // start tight for ground camera
@@ -47,7 +47,7 @@ export default function OrbitControls({ rocketRef, boosterRef, worldOffsetRef, c
   useEffect(() => {
     if (prevMode.current !== cameraMode) {
       if (cameraMode !== 'ground') {
-        distance.current = 600
+        distance.current = 800
         theta.current = Math.PI * 0.25
         phi.current = Math.PI * 0.35
         currentFov.current = ORBIT_FOV
