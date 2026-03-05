@@ -27,24 +27,25 @@ export function computeEnginePositions(rings, modelBaseRadius, physicsBaseRadius
 }
 
 // Booster engine layout (Super Heavy — 33 Raptor engines)
+// Radii in meters from center for a 9m diameter (4.5m radius) vehicle
 export const BOOSTER_RINGS = {
   all: [
-    { count: 3, radius: 0.1, scale: 1.0 },
+    { count: 3, radius: 0.12, scale: 1.0 },
     { count: 10, radius: 0.4, scale: 0.8 },
-    { count: 20, radius: 0.8, scale: 0.6 },
+    { count: 20, radius: 0.75, scale: 0.6 },
   ],
   boostback: [
-    { count: 3, radius: 0.1, scale: 1.0 },
+    { count: 3, radius: 0.12, scale: 1.0 },
     { count: 10, radius: 0.4, scale: 0.8 },
   ],
   landing: [
-    { count: 3, radius: 0.1, scale: 1.0 },
+    { count: 3, radius: 0.12, scale: 1.0 },
   ],
 }
 
 export const SHIP_RINGS = [
-  { count: 3, radius: 0.15, scale: 1.0 },
-  { count: 3, radius: 0.4, scale: 0.85 },
+  { count: 3, radius: 0.18, scale: 1.0 },
+  { count: 3, radius: 0.42, scale: 0.85 },
 ]
 
 // Plume visual layers

@@ -12,8 +12,8 @@ import {
 } from './constants.js'
 import { computeMassProperties } from './massModel.js'
 import { computeEngineForces, getActiveEngines, getConfigThrust } from './engines.js'
-import { computeAeroForces, getAtmosphere, getCd } from './aero.js'
-import { computeShipControl, computeBoosterControl } from './control.js'
+import { computeAeroForces } from './aero.js'
+import { computeShipControl, computeBoosterControl, HOVER_ALT_KP, HOVER_VR_KP, HOVER_VT_KD } from './control.js'
 import { rotationalStep } from './rotational.js'
 
 // === Orbital Elements ===
@@ -277,7 +277,7 @@ export function physicsStep(state, dt, phase) {
     } else {
       // Ship powered flight after staging
       const orb = getOrbitalElements(s.r, s.vr, s.vt)
-      const targetReached = orb.periapsis > 100_000 && orb.apoapsis > 0 && orb.apoapsis < 500_000
+      const targetReached = orb.periapsis > 100_000 && orb.apoapsis > 0 && orb.eccentricity < 1
 
       if (s.shipFuel > 0 && !targetReached) {
         activeEngines = getActiveEngines('ship', 'staged')
@@ -548,13 +548,13 @@ export function physicsStep(state, dt, phase) {
       if (s.boosterLandingFuel > 0 && s.boosterBurnoffTimer < BOOSTER.burnoffDuration) {
         // PD altitude hold: target vr = gain * (hTarget - bAlt), then thrust to achieve that
         const altError = hTarget - bAlt
-        const targetVr = altError * 1.5 // proportional gain
+        const targetVr = altError * HOVER_ALT_KP
         const vrError = targetVr - s.boosterVr
 
         // Vertical: gravity compensation + PD correction
-        const aR_cmd = gLocal + vrError * 2.0 // PD on vertical
+        const aR_cmd = gLocal + vrError * HOVER_VR_KP
         // Horizontal: damp any drift
-        const aT_cmd = -s.boosterVt * 2.0
+        const aT_cmd = -s.boosterVt * HOVER_VT_KD
 
         const aCmdMag = Math.sqrt(aR_cmd * aR_cmd + aT_cmd * aT_cmd)
         const activeEng = getActiveEngines('booster', 'hover')

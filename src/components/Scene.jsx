@@ -8,7 +8,7 @@ import Booster from './Booster'
 import LaunchPad from './LaunchPad'
 import OrbitControls from './FPSControls'
 import SunLight from './SunLight'
-import { physicsStep, EARTH_RADIUS } from '../physics/index.js'
+import { physicsStep, EARTH_RADIUS, LAUNCH_LAT, LAUNCH_LON } from '../physics/index.js'
 
 function SkyFade({ worldOffsetRef }) {
   const { scene, camera } = useThree()
@@ -28,13 +28,7 @@ function SkyFade({ worldOffsetRef }) {
   return null
 }
 
-// Compute the east direction at Boca Chica on the rotated Earth.
-// The Earth is rotated so Boca Chica is at Y+. We need the local east
-// direction in that rotated frame so the orbital plane goes east.
-const LAUNCH_LAT = 25.99622065480988 * (Math.PI / 180)
-const LAUNCH_LON = -97.15443150451574 * (Math.PI / 180)
-
-// Rotation quaternion: same as TiledEarth — maps Boca Chica radial to (0,1,0)
+// Rotation quaternion: maps Boca Chica radial to (0,1,0)
 const _launchDir = new THREE.Vector3(
   -Math.cos(LAUNCH_LAT) * Math.sin(LAUNCH_LON),
   Math.sin(LAUNCH_LAT),

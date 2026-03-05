@@ -1,12 +1,7 @@
 import { useRef, useMemo, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-
-const EARTH_RADIUS = 6_371_000
-
-// Launch site: SpaceX Starbase, Boca Chica TX
-const LAUNCH_LAT = 25.99622065480988 * (Math.PI / 180)
-const LAUNCH_LON = -97.15443150451574 * (Math.PI / 180)
+import { EARTH_RADIUS, LAUNCH_LAT, LAUNCH_LON } from '../physics/index.js'
 
 // Tile definitions: 4×2 grid covering the globe
 // A1 contains the launch site (Boca Chica) — uses higher tessellation so the
@@ -129,6 +124,7 @@ export default function TiledEarth() {
     return createSegmentGeometry(
       lonCenter - halfSpanDeg, lonCenter + halfSpanDeg,
       latCenter - halfSpanDeg, latCenter + halfSpanDeg,
+      segs,
     )
   }, [])
   const overlayMatRef = useRef()
@@ -199,18 +195,17 @@ export default function TiledEarth() {
 
   const { camera } = useThree()
   const tempVec = useMemo(() => new THREE.Vector3(), [])
+  const _earthCenter = useMemo(() => new THREE.Vector3(), [])
+  const _tileCenter = useMemo(() => new THREE.Vector3(), [])
 
   useFrame(() => {
-    if (groupRef.current) groupRef.current.visible = true
-
     // Compute camera altitude for atmosphere/overlay fading
-    const earthCenter = new THREE.Vector3(0, -EARTH_RADIUS, 0)
+    _earthCenter.set(0, -EARTH_RADIUS, 0)
     if (groupRef.current?.parent) {
-      // Earth center in world space (shifted by floating origin)
       const parentPos = groupRef.current.parent.position
-      earthCenter.set(parentPos.x, parentPos.y - EARTH_RADIUS, parentPos.z)
+      _earthCenter.set(parentPos.x, parentPos.y - EARTH_RADIUS, parentPos.z)
     }
-    const camAlt = camera.position.distanceTo(earthCenter) - EARTH_RADIUS
+    const camAlt = camera.position.distanceTo(_earthCenter) - EARTH_RADIUS
 
     // Atmosphere — visible from ground (subtle) and increasingly bright from space
     if (atmosRef.current) {
@@ -224,11 +219,11 @@ export default function TiledEarth() {
     }
 
     // Camera direction for tile visibility
-    const tileCenter = new THREE.Vector3(0, -EARTH_RADIUS, 0)
+    _tileCenter.set(0, -EARTH_RADIUS, 0)
     if (groupRef.current?.parent) {
       tempVec.copy(camera.position)
       groupRef.current.parent.worldToLocal(tempVec)
-      tempVec.sub(tileCenter).normalize()
+      tempVec.sub(_tileCenter).normalize()
     }
 
     for (const tile of TILES) {

@@ -8,18 +8,18 @@ import { BOOSTER, SHIP } from './constants.js'
 // Discrete structural mass elements for Super Heavy booster
 // LOX:CH4 mass ratio ≈ 3.5:1 → LOX is 77.8%, CH4 is 22.2%
 const BOOSTER_ELEMENTS = [
-  { name: 'engines',       mass: 40000,  pos: 1.5,  len: 3 },
-  { name: 'thrust_struct', mass: 15000,  pos: 4,    len: 2 },
-  { name: 'tank_lower',    mass: 10000,  pos: 12,   len: 4 },
-  { name: 'lox_tank_wall', mass: 12000,  pos: 22,   len: 24 },
-  { name: 'intertank',     mass: 8000,   pos: 37,   len: 3 },
-  { name: 'ch4_tank_wall', mass: 8000,   pos: 48,   len: 16 },
-  { name: 'tank_upper',    mass: 8000,   pos: 58,   len: 4 },
-  { name: 'grid_fins',     mass: 12000,  pos: 63,   len: 2 },
-  { name: 'interstage',    mass: 7000,   pos: 67,   len: 4 },
+  { name: 'engines',       mass: 50000,  pos: 1.5,  len: 3 },   // 33 Raptors (~1.5t each)
+  { name: 'thrust_struct', mass: 25000,  pos: 4,    len: 2 },   // thrust puck
+  { name: 'tank_lower',    mass: 15000,  pos: 12,   len: 4 },
+  { name: 'lox_tank_wall', mass: 20000,  pos: 22,   len: 24 },
+  { name: 'intertank',     mass: 12000,  pos: 37,   len: 3 },
+  { name: 'ch4_tank_wall', mass: 15000,  pos: 48,   len: 16 },
+  { name: 'tank_upper',    mass: 12000,  pos: 58,   len: 4 },
+  { name: 'grid_fins',     mass: 16000,  pos: 63,   len: 2 },   // 4 large Ti grid fins
+  { name: 'interstage',    mass: 10000,  pos: 67,   len: 4 },
+  { name: 'plumbing',      mass: 25000,  pos: 34,   len: 40 },  // valves, feedlines, avionics, wiring
 ]
-// Dry structural total: 120,000 kg
-// Remaining 80,000 of dryMass (200t) is distributed engine mass above
+// Dry structural total: 200,000 kg (matches BOOSTER.dryMass)
 
 // Fuel tank geometry for booster
 const BOOSTER_LOX_TANK = { posStart: 10, posEnd: 34, fraction: 0.778 }  // LOX (bottom)

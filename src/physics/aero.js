@@ -2,7 +2,7 @@
 // Aerodynamics — AoA-based forces, grid fin control, pitch damping
 // ============================================================
 
-import { CROSS_SECTION_AREA, BOOSTER, SHIP, GAMMA, R_AIR, G0 } from './constants.js'
+import { CROSS_SECTION_AREA, BOOSTER, SHIP, GAMMA, R_AIR, G0, EARTH_RADIUS } from './constants.js'
 import { BOOSTER_LENGTH, SHIP_LENGTH, GRID_FIN_POS } from './massModel.js'
 
 // === Atmosphere (US Standard 1976) ===
@@ -99,11 +99,9 @@ export function computeAeroForces({
   let alpha = angle - flightPathAngle
   // Wrap to [-π, π]
   alpha = ((alpha + Math.PI) % (2 * Math.PI)) - Math.PI
-  if (alpha < -Math.PI) alpha += 2 * Math.PI
 
   const sinAlpha = Math.sin(alpha)
   const cosAlpha = Math.cos(alpha)
-  const absAlpha = Math.abs(alpha)
 
   // --- Axial drag (along velocity direction) ---
   // Use effective area based on AoA: interpolate between nose-on and broadside
@@ -148,9 +146,8 @@ export function computeAeroForces({
   }
 
   // --- Pitch damping ---
-  // τ_damp = q * Cmq * (L/2v) * L * A_ref * ω
-  // Simplified: τ_damp = -½ρ * v * |Cmq| * (L/2)² * A_ref * ω
-  const dampingTorque = -0.5 * atm.density * speed * Math.abs(CMQ) * (length / 2) * (length / 2) * aRef * omega
+  // τ_damp = q * Cmq * (L/(2v)) * L * A_ref * ω = ½ρv * |Cmq| * (L²/2) * A_ref * ω
+  const dampingTorque = -0.5 * atm.density * speed * Math.abs(CMQ) * (length * length / 2) * aRef * omega
 
   // --- Grid fin torque (booster only) ---
   let finTorque = 0
@@ -173,16 +170,3 @@ export function computeAeroForces({
   }
 }
 
-// Re-export for backward compatibility
-export function getDragForce(speed, altitude) {
-  const atm = getAtmosphere(altitude)
-  const mach = speed / atm.speedOfSound
-  const cd = getCd(mach)
-  const F = 0.5 * atm.density * speed * speed * cd * CROSS_SECTION_AREA
-  return { force: F, mach, cd, density: atm.density, dynamicPressure: 0.5 * atm.density * speed * speed }
-}
-
-export function getGravity(altitude) {
-  const r = 6_371_000 + altitude
-  return G0 * (6_371_000 / r) * (6_371_000 / r)
-}

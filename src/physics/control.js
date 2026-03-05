@@ -3,6 +3,8 @@
 // ============================================================
 
 import { TARGET_ORBIT } from './constants.js'
+import { wrapAngle } from './rotational.js'
+import { getAtmosphere } from './aero.js'
 
 const DEG = Math.PI / 180
 
@@ -13,6 +15,11 @@ const BOOSTER_KP = 2.5
 const BOOSTER_KD = 2.0
 const FIN_KP = 1.0
 const FIN_KD = 0.8
+
+// Hover PD gains (used by physics.js for altitude/velocity hold)
+export const HOVER_ALT_KP = 1.5
+export const HOVER_VR_KP = 2.0
+export const HOVER_VT_KD = 2.0
 
 // Actuator limits
 const MAX_GIMBAL = 15 * DEG
@@ -64,7 +71,8 @@ function getBoosterTargetAngle(boosterPhase, boosterVr, boosterVt, boosterTheta,
     case 'descent': {
       // High altitude: fall engines-down (stable orientation in thin air)
       // Below 50km: transition to belly-flop for maximum drag
-      const q = 0.5 * 1.225 * Math.exp(-altitude / 8500) * speed * speed // rough dynamic pressure
+      const atm = getAtmosphere(altitude)
+      const q = 0.5 * atm.density * speed * speed
       const bellyFlopBlend = Math.min(1, Math.max(0, (q - 100) / 5000)) // ramp from q=100 to q=5100 Pa
       // Engines-down = retrograde ≈ PI (falling), belly-flop = PI/2
       return Math.PI * (1 - 0.5 * bellyFlopBlend)
@@ -87,15 +95,6 @@ function getBoosterTargetAngle(boosterPhase, boosterVr, boosterVt, boosterTheta,
     default:
       return 0
   }
-}
-
-/**
- * Wrap angle difference to [-π, π]
- */
-function wrapAngle(a) {
-  a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
-  if (a > Math.PI) a -= 2 * Math.PI
-  return a
 }
 
 /**

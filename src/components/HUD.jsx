@@ -2,22 +2,31 @@ import { useEffect, useState, useRef } from 'react'
 import { BOOSTER, SHIP, EARTH_RADIUS as EARTH_R } from '../physics/index.js'
 
 const TIME_SCALES = [1, 2, 5, 10, 25, 50, 100]
+const CAMERAS = ['Ground', 'Ship', 'Booster']
+const CAMERA_KEYS = { Ground: 'ground', Ship: 'ship', Booster: 'booster' }
 
-// Fade-in/out callout component
+/* Solid dark panel — inline style so it ALWAYS works regardless of Tailwind */
+const panelStyle = {
+  background: 'rgba(10, 12, 18, 0.85)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 16,
+}
+
+/* ── Callout ── */
 function Callout({ show, children }) {
   const [visible, setVisible] = useState(false)
   const [opacity, setOpacity] = useState(0)
-  const timerRef = useRef(null)
+  const timer = useRef(null)
 
   useEffect(() => {
     if (show) {
       setVisible(true)
       requestAnimationFrame(() => setOpacity(1))
-      timerRef.current = setTimeout(() => setOpacity(0), 4000)
-    } else {
-      setOpacity(0)
-    }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+      timer.current = setTimeout(() => setOpacity(0), 4000)
+    } else { setOpacity(0) }
+    return () => { if (timer.current) clearTimeout(timer.current) }
   }, [show])
 
   useEffect(() => {
@@ -29,33 +38,46 @@ function Callout({ show, children }) {
 
   if (!visible) return null
   return (
-    <div
-      className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center transition-opacity duration-500"
-      style={{ opacity }}
-    >
-      {children}
+    <div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 20, transition: 'opacity 0.5s', opacity, textAlign: 'center' }}>
+      <div style={{ ...panelStyle, padding: '28px 48px' }}>{children}</div>
     </div>
   )
 }
 
-export default function HUD({ phase, simRef, timeScaleRef, cameraTarget, onLaunch, onStop, onReset, onToggleCamera }) {
+/* ════════════════════════════════════
+   HUD
+   ════════════════════════════════════ */
+export default function HUD({
+  phase, simRef, timeScaleRef, cameraTarget,
+  onLaunch, onStop, onReset, onToggleCamera, onSetCamera,
+}) {
   const [tel, setTel] = useState({})
-  const [timeScale, setTimeScale] = useState(1)
+  const [ts, setTs] = useState(1)
   const [showStaged, setShowStaged] = useState(false)
   const [showOrbit, setShowOrbit] = useState(false)
-  const prevPhaseRef = useRef(phase)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const prev = useRef(phase)
 
   useEffect(() => {
-    const interval = setInterval(() => setTel({ ...simRef.current }), 50)
-    return () => clearInterval(interval)
+    const id = setInterval(() => setTel({ ...simRef.current }), 50)
+    return () => clearInterval(id)
   }, [simRef])
 
   useEffect(() => {
-    if (phase === 'staged' && prevPhaseRef.current === 'launching') setShowStaged(true)
-    if (phase === 'orbit' && prevPhaseRef.current === 'staged') setShowOrbit(true)
+    if (phase === 'staged' && prev.current === 'launching') setShowStaged(true)
+    if (phase === 'orbit' && prev.current === 'staged') setShowOrbit(true)
     if (phase === 'idle') { setShowStaged(false); setShowOrbit(false) }
-    prevPhaseRef.current = phase
+    prev.current = phase
   }, [phase])
+
+  const slower = () => setTs(p => {
+    const i = Math.max(0, TIME_SCALES.indexOf(p) - 1)
+    const n = TIME_SCALES[i]; timeScaleRef.current = n; return n
+  })
+  const faster = () => setTs(p => {
+    const i = Math.min(TIME_SCALES.length - 1, TIME_SCALES.indexOf(p) + 1)
+    const n = TIME_SCALES[i]; timeScaleRef.current = n; return n
+  })
 
   useEffect(() => {
     const onKey = (e) => {
@@ -63,400 +85,341 @@ export default function HUD({ phase, simRef, timeScaleRef, cameraTarget, onLaunc
       if (e.code === 'KeyQ' && (phase === 'launching' || phase === 'staged')) onStop()
       if (e.code === 'KeyR' && (phase === 'falling' || phase === 'landed' || phase === 'fuel_exhausted' || phase === 'orbit')) onReset()
       if (e.code === 'KeyT') onToggleCamera()
-      if (e.code === 'Comma') {
-        setTimeScale(prev => {
-          const idx = Math.max(0, TIME_SCALES.indexOf(prev) - 1)
-          const next = TIME_SCALES[idx]
-          timeScaleRef.current = next
-          return next
-        })
-      }
-      if (e.code === 'Period') {
-        setTimeScale(prev => {
-          const idx = Math.min(TIME_SCALES.length - 1, TIME_SCALES.indexOf(prev) + 1)
-          const next = TIME_SCALES[idx]
-          timeScaleRef.current = next
-          return next
-        })
-      }
+      if (e.code === 'Digit1') onSetCamera('ground')
+      if (e.code === 'Digit2') onSetCamera('ship')
+      if (e.code === 'Digit3') onSetCamera('booster')
+      if (e.code === 'Comma') slower()
+      if (e.code === 'Period') faster()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, onLaunch, onStop, onReset, onToggleCamera, timeScaleRef])
+  }, [phase, onLaunch, onStop, onReset, onToggleCamera, onSetCamera, timeScaleRef])
 
-  const fmt = (n, decimals = 1) => {
+  const fmt = (n, d = 1) => {
     if (n == null || isNaN(n)) return '—'
-    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(decimals) + 'M'
-    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(decimals) + 'k'
-    return n.toFixed(decimals)
+    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(d) + 'M'
+    if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(d) + 'k'
+    return n.toFixed(d)
   }
-
-  const fmtDist = (m) => {
+  const dist = (m) => {
     if (m == null || isNaN(m)) return '—'
-    if (Math.abs(m) >= 1000) return (m / 1000).toFixed(2) + ' km'
-    return m.toFixed(1) + ' m'
+    return Math.abs(m) >= 1000 ? (m / 1000).toFixed(2) + ' km' : m.toFixed(1) + ' m'
   }
-
-  const fmtVel = (v) => {
+  const vel = (v) => {
     if (v == null || isNaN(v)) return '—'
-    if (Math.abs(v) >= 1000) return (v / 1000).toFixed(2) + ' km/s'
-    return v.toFixed(1) + ' m/s'
+    return Math.abs(v) >= 1000 ? (v / 1000).toFixed(2) + ' km/s' : v.toFixed(1) + ' m/s'
   }
-
-  const fmtTime = (s) => {
+  const tmr = (s) => {
     if (s == null || isNaN(s)) return 'T+0:00'
-    const mins = Math.floor(s / 60)
-    const secs = Math.floor(s % 60)
-    return `T+${mins}:${secs.toString().padStart(2, '0')}`
+    return `T+${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
   }
+  const deg = (r) => ((r ?? 0) * 180 / Math.PI).toFixed(1)
 
-  const boosterTotalFuel = (tel.boosterFuel ?? 0) + (tel.boosterReturnFuel ?? 0)
-  const boosterPct = (boosterTotalFuel / BOOSTER.propellantMass) * 100
-  const shipPct = tel.shipFuel != null ? (tel.shipFuel / SHIP.propellantMass) * 100 : 100
+  const bFuel = ((tel.boosterFuel ?? 0) + (tel.boosterReturnFuel ?? 0)) / BOOSTER.propellantMass * 100
+  const sFuel = tel.shipFuel != null ? (tel.shipFuel / SHIP.propellantMass) * 100 : 100
 
-  const phaseLabel = {
-    idle: 'Standing By',
-    launching: 'Powered Ascent',
-    staged: 'Ship Burn',
-    falling: 'Free Fall',
-    fuel_exhausted: 'MECO',
-    orbit: 'In Orbit',
-    landed: 'Landed',
-  }[phase] || phase
+  const phLabel = { idle: 'Standing By', launching: 'Powered Ascent', staged: 'Ship Burn', falling: 'Free Fall', fuel_exhausted: 'MECO', orbit: 'In Orbit', landed: 'Landed' }[phase] || phase
+  const phDot = { idle: '#888', launching: '#fb923c', staged: '#22d3ee', falling: '#f87171', fuel_exhausted: '#facc15', orbit: '#4ade80', landed: '#4ade80' }[phase] || '#888'
 
-  const phaseColor = {
-    idle: 'text-white/50',
-    launching: 'text-orange-400',
-    staged: 'text-cyan-400',
-    falling: 'text-red-400',
-    fuel_exhausted: 'text-yellow-400',
-    orbit: 'text-green-400',
-    landed: 'text-green-400',
-  }[phase] || 'text-white/50'
+  const bLabel = { coast: 'Coast', boostback: 'Boostback', descent: 'Belly-Flop', landing: 'Landing Burn', hover: 'Hovering', splashed: 'Splashdown' }[tel.boosterPhase] || ''
+  const bDotC = { coast: '#facc15', boostback: '#fb923c', descent: '#facc15', landing: '#f87171', hover: '#fdba74', splashed: '#60a5fa' }[tel.boosterPhase] || '#666'
 
-  const boosterPhaseLabel = {
-    attached: '',
-    coast: 'Coast',
-    boostback: 'Boostback',
-    descent: 'Belly-Flop',
-    landing: 'Landing Burn',
-    hover: 'Hovering',
-    splashed: 'Splashdown',
-  }[tel.boosterPhase] || ''
-
-  const boosterPhaseColor = {
-    coast: 'text-yellow-400',
-    boostback: 'text-orange-400',
-    descent: 'text-yellow-400',
-    landing: 'text-red-400',
-    hover: 'text-orange-300',
-    splashed: 'text-blue-400',
-  }[tel.boosterPhase] || 'text-white/40'
-
-  // Booster derived values
   const bAlt = (tel.boosterR ?? EARTH_R) - EARTH_R
   const bVr = tel.boosterVr ?? 0
   const bVt = tel.boosterVt ?? 0
   const bSpd = Math.sqrt(bVr * bVr + bVt * bVt)
-  const bAngle = tel.boosterAngle ?? 0
   const bOmega = tel.boosterOmega ?? 0
+  const bEng = tel.boosterPhase === 'boostback' || tel.boosterPhase === 'landing' || tel.boosterPhase === 'hover'
 
-  // Ship derived
-  const shipAngle = tel.angle ?? 0
-  const shipOmega = tel.omega ?? 0
+  const doAction = () => {
+    if (phase === 'idle') onLaunch()
+    else if (phase === 'launching' || phase === 'staged') onStop()
+    else onReset()
+  }
+  const actionLabel = { idle: 'Launch', launching: 'Cut-off', staged: 'Cut-off', falling: 'Reset', landed: 'Reset', fuel_exhausted: 'Reset', orbit: 'Reset' }[phase]
 
-  // Booster engines active?
-  const bEnginesOn = tel.boosterPhase === 'boostback' || tel.boosterPhase === 'landing' || tel.boosterPhase === 'hover'
+  const font = "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif"
+  const mono = "'SF Mono', 'Cascadia Code', 'Consolas', monospace"
 
   return (
-    <div className="absolute inset-0 pointer-events-none select-none">
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none', fontFamily: font, color: 'white' }}>
 
-      {/* ===== LEFT: Mission Info ===== */}
-      <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg p-3 min-w-[200px]">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-xs font-mono uppercase font-semibold ${phaseColor}`}>{phaseLabel}</span>
-          <div className="flex items-center gap-2">
-            {timeScale !== 1 && <span className="text-[10px] font-mono text-yellow-400">{timeScale}x</span>}
-            <span className="text-xs text-white/40 font-mono">{fmtTime(tel.missionTime)}</span>
-          </div>
+      {/* ═══ TOP: status ═══ */}
+      <div style={{ position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)' }}>
+        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 20, padding: '14px 32px' }}>
+          <svg width="12" height="12"><circle cx="6" cy="6" r="6" fill={phDot} /></svg>
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.9 }}>{phLabel}</span>
+          <span style={{ opacity: 0.15, fontSize: 18 }}>|</span>
+          <span style={{ fontSize: 15, opacity: 0.45, fontFamily: mono, fontVariantNumeric: 'tabular-nums' }}>{tmr(tel.missionTime)}</span>
         </div>
+      </div>
 
-        {/* Forces & Environment */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          <TelRow label="Thrust" value={`${fmt(tel.thrustForce)} N`} color="text-orange-400" />
-          <TelRow label="Drag" value={`${fmt(tel.dragForce)} N`} color="text-red-300" />
-          <TelRow label="Mach" value={(tel.mach ?? 0).toFixed(2)} color="text-purple-400" />
-          <TelRow label="Max Q" value={`${fmt(tel.dynamicPressure)} Pa`} color="text-yellow-400" />
+      {/* ═══ BOTTOM: controls ═══ */}
+      <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)' }}>
+        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 6, padding: 8 }}>
+          <Btn onClick={slower}>−</Btn>
+          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: mono, fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'center', color: ts > 1 ? '#facc15' : 'rgba(255,255,255,0.4)' }}>{ts}x</span>
+          <Btn onClick={faster}>+</Btn>
+          <Sep />
+          {CAMERAS.map(c => (
+            <Btn key={c} onClick={() => onSetCamera(CAMERA_KEYS[c])} active={cameraTarget === CAMERA_KEYS[c]}>{c}</Btn>
+          ))}
+          <Sep />
+          {actionLabel && <Btn onClick={doAction} accent={phase === 'idle'}>{actionLabel}</Btn>}
         </div>
+      </div>
 
-        {/* Fuel */}
-        <div className="mt-2 space-y-1">
-          <FuelBar label="Booster" pct={boosterPct} color={boosterPct > 20 ? '#22c55e' : boosterPct > 5 ? '#eab308' : '#ef4444'} />
-          <FuelBar label="Ship" pct={shipPct} color={shipPct > 20 ? '#3b82f6' : shipPct > 5 ? '#eab308' : '#ef4444'} />
+      {/* ═══ LEFT: flight data ═══ */}
+      <div style={{ position: 'absolute', top: 20, left: 20, ...panelStyle, padding: '20px 24px', width: 230, maxHeight: 'calc(100vh - 110px)', overflowY: 'auto', pointerEvents: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Row l="Thrust" v={`${fmt(tel.thrustForce)} N`} />
+          <Row l="Drag" v={`${fmt(tel.dragForce)} N`} />
+          <Row l="Mach" v={(tel.mach ?? 0).toFixed(2)} />
+          <Row l="Max Q" v={`${fmt(tel.dynamicPressure)} Pa`} />
         </div>
-
-        {/* Orbital elements */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Fuel label="Booster" pct={bFuel} />
+          <Fuel label="Ship" pct={sFuel} />
+        </div>
         {(tel.altitude > 50000 || tel.inOrbit) && (
-          <div className="mt-2 pt-2 border-t border-white/10">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              <TelRow label="Apo" value={fmtDist(tel.apoapsis)} color="text-cyan-300" />
-              <TelRow label="Peri" value={fmtDist(tel.periapsis)} color={(tel.periapsis ?? 0) > 0 ? 'text-green-400' : 'text-red-400'} />
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Row l="Apoapsis" v={dist(tel.apoapsis)} />
+            <Row l="Periapsis" v={dist(tel.periapsis)} warn={(tel.periapsis ?? 0) < 0} />
+            <Row l="Eccentricity" v={(tel.eccentricity ?? 0).toFixed(4)} />
+          </div>
+        )}
+
+        {/* Advanced toggle */}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => setShowAdvanced(p => !p)}
+            style={{
+              ...btnBase,
+              width: '100%',
+              padding: '8px 0',
+              fontSize: 11,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              textAlign: 'center',
+              opacity: 0.35,
+            }}
+          >
+            {showAdvanced ? '▾ Advanced' : '▸ Advanced'}
+          </button>
+
+          {showAdvanced && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+              <Row l="Total Mass" v={`${fmt(tel.totalMass)} kg`} />
+              <Row l="Thrust Accel" v={`${(tel.thrustAccel ?? 0).toFixed(2)} m/s²`} />
+              <Row l="Drag Accel" v={`${(tel.dragAccel ?? 0).toFixed(2)} m/s²`} />
+              <Row l="Net Accel" v={`${(tel.netAccel ?? 0).toFixed(2)} m/s²`} />
+              <Row l="Gravity" v={`${(tel.gravity ?? 0).toFixed(2)} m/s²`} />
+              <Row l="TWR" v={tel.gravity > 0 ? ((tel.thrustAccel ?? 0) / tel.gravity).toFixed(2) : '—'} />
+              <Row l="Drag Coeff" v={(tel.cd ?? 0).toFixed(3)} />
+              <Row l="Peak Q" v={`${fmt(tel.maxQ)} Pa`} />
+              <Row l="Mass Flow" v={`${(tel.massFlow ?? 0).toFixed(1)} kg/s`} />
+              <Row l="Fuel Rem" v={`${(tel.fuelPercent ?? 0).toFixed(1)}%`} />
+              {tel.stageTime > 0 && <Row l="Stage Time" v={`T+${Math.floor(tel.stageTime)}s`} />}
+              <Row l="Heading" v={`${deg(tel.heading)}°`} />
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* ===== RIGHT: Vehicle Cards ===== */}
-      <div className="absolute top-4 right-4 flex flex-col gap-3 items-end">
-
-        {/* Controls (compact) */}
-        <div className="bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2">
-          <div className="flex gap-3 text-[11px] text-white/50 font-mono">
-            <span><span className="text-yellow-400/70">&lt; &gt;</span> Speed</span>
-            {phase === 'idle' && <span><span className="text-orange-400">E</span> Launch</span>}
-            {(phase === 'launching' || phase === 'staged') && <span><span className="text-red-400">Q</span> Cut-Off</span>}
-            {(phase === 'falling' || phase === 'landed' || phase === 'fuel_exhausted' || phase === 'orbit') && (
-              <span><span className="text-blue-400">R</span> Reset</span>
-            )}
-            <span><span className="text-cyan-400">T</span> Camera ({cameraTarget === 'ground' ? 'Ground' : cameraTarget === 'ship' ? 'Ship' : 'Booster'})</span>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Starship Card */}
-        <VehicleCard
-          title="Starship"
-          titleColor="text-cyan-400"
-          borderColor="border-cyan-500/20"
-          altitude={tel.altitude}
-          vr={tel.vr}
-          vt={tel.vt}
-          speed={tel.speed}
-          angle={shipAngle}
-          omega={shipOmega}
-          alpha={tel.alpha}
-          gimbal={tel.gimbalAngle}
-          isTracking={cameraTarget === 'ship' || (cameraTarget === 'ground')}
-          fmtDist={fmtDist}
-          fmtVel={fmtVel}
-          engineIndicator={
-            tel.staged
-              ? <ShipEngineIndicator active={tel.enginesOn} />
-              : <BoosterEngineIndicator active={tel.enginesOn} />
-          }
+      {/* ═══ RIGHT: vehicles ═══ */}
+      <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', flexDirection: 'column', gap: 12, width: 270 }}>
+        <Vehicle
+          name="Starship" active={!tel.staged || cameraTarget === 'ship'}
+          alt={tel.altitude} spd={tel.speed} vr={tel.vr} vt={tel.vt}
+          pitch={tel.angle} aoa={tel.alpha} omega={tel.omega} gimbal={tel.gimbalAngle}
+          dist={dist} vel={vel} deg={deg} angle={tel.angle ?? 0}
+          engine={tel.staged ? <ShipEngine on={tel.enginesOn} /> : <BoosterEngine on={tel.enginesOn} />}
         />
-
-        {/* Super Heavy Card */}
-        <VehicleCard
-          title="Super Heavy"
-          titleColor="text-orange-400"
-          borderColor="border-orange-500/20"
-          altitude={bAlt}
-          vr={bVr}
-          vt={bVt}
-          speed={bSpd}
-          angle={bAngle}
-          omega={bOmega}
-          alpha={tel.boosterAlpha}
-          gimbal={tel.boosterGimbalAngle}
-          finDeflection={tel.boosterFinDeflection}
-          phaseLabel={boosterPhaseLabel}
-          phaseColor={boosterPhaseColor}
-          isTracking={tel.staged && cameraTarget === 'booster'}
-          dimmed={!tel.staged}
-          fmtDist={fmtDist}
-          fmtVel={fmtVel}
-          engineIndicator={
-            <BoosterEngineIndicator
-              active={bEnginesOn}
-              phase={tel.boosterPhase}
-            />
-          }
+        <Vehicle
+          name="Super Heavy" active={tel.staged && cameraTarget === 'booster'} dimmed={!tel.staged}
+          badge={bLabel} badgeDot={bDotC}
+          alt={bAlt} spd={bSpd} vr={bVr} vt={bVt}
+          pitch={tel.boosterAngle} aoa={tel.boosterAlpha} omega={bOmega} gimbal={tel.boosterGimbalAngle}
+          fins={tel.boosterFinDeflection} dist={dist} vel={vel} deg={deg} angle={tel.boosterAngle ?? 0}
+          engine={<BoosterEngine on={bEng} phase={tel.boosterPhase} />}
         />
       </div>
 
-      {/* Action prompt */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-        {phase === 'idle' && (
-          <div className="text-white/60 text-sm font-mono tracking-wide animate-pulse">
-            Press E to Launch
-          </div>
-        )}
-      </div>
-
-      {/* Smooth callouts */}
+      {/* ═══ CALLOUTS ═══ */}
       <Callout show={showStaged}>
-        <div className="text-2xl font-light text-cyan-400 tracking-[0.3em] uppercase">Stage Separation</div>
-        <div className="text-white/40 text-xs mt-1 font-mono">Ship engines ignited</div>
+        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', color: '#22d3ee' }}>Stage Separation</div>
+        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>Ship engines ignited</div>
       </Callout>
-
       <Callout show={showOrbit}>
-        <div className="text-2xl font-light text-green-400 tracking-[0.3em] uppercase">Orbit Achieved</div>
-        <div className="text-white/40 text-xs mt-1 font-mono">
-          {fmtDist(tel.apoapsis)} x {fmtDist(tel.periapsis)}
-        </div>
+        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', color: '#4ade80' }}>Orbit Achieved</div>
+        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>{dist(tel.apoapsis)} × {dist(tel.periapsis)}</div>
       </Callout>
-
       <Callout show={phase === 'landed'}>
-        <div className="text-2xl font-light text-yellow-400 tracking-[0.3em] uppercase">Touchdown</div>
+        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.9 }}>Touchdown</div>
       </Callout>
-
       <Callout show={phase === 'fuel_exhausted'}>
-        <div className="text-2xl font-light text-yellow-400 tracking-[0.3em] uppercase">SECO</div>
-        <div className="text-white/40 text-xs mt-1 font-mono">Ballistic trajectory</div>
+        <div style={{ fontSize: 24, fontWeight: 600, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.9 }}>SECO</div>
+        <div style={{ fontSize: 14, opacity: 0.4, marginTop: 6 }}>Ballistic trajectory</div>
       </Callout>
     </div>
   )
 }
 
-// ===== Vehicle Card =====
-function VehicleCard({
-  title, titleColor, borderColor,
-  altitude, vr, vt, speed, angle, omega, alpha, gimbal,
-  finDeflection, phaseLabel, phaseColor,
-  isTracking, dimmed, fmtDist, fmtVel,
-  engineIndicator,
-}) {
-  const deg = (rad) => ((rad ?? 0) * 180 / Math.PI).toFixed(1)
+/* ── Button ── */
+const btnBase = {
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: 12,
+  padding: '12px 20px',
+  fontSize: 15,
+  fontWeight: 500,
+  fontFamily: 'inherit',
+  color: 'rgba(255,255,255,0.45)',
+  background: 'transparent',
+  transition: 'all 0.1s',
+  whiteSpace: 'nowrap',
+}
 
+function Btn({ children, onClick, active, accent }) {
+  const style = {
+    ...btnBase,
+    ...(active ? { background: 'rgba(255,255,255,0.12)', color: '#fff' } : {}),
+    ...(accent ? { background: 'rgba(34,211,238,0.15)', color: '#22d3ee' } : {}),
+  }
+  return <button style={style} onClick={onClick} onMouseEnter={e => { if (!active) e.target.style.background = 'rgba(255,255,255,0.08)' }} onMouseLeave={e => { if (!active && !accent) e.target.style.background = 'transparent'; if (accent) e.target.style.background = 'rgba(34,211,238,0.15)' }}>{children}</button>
+}
+
+function Sep() {
+  return <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)', margin: '0 8px' }} />
+}
+
+/* ── Row ── */
+function Row({ l, v, warn }) {
   return (
-    <div className={`bg-black/60 backdrop-blur-sm border ${borderColor} rounded-lg p-3 min-w-[280px] ${dimmed ? 'opacity-50' : ''}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-mono font-semibold uppercase ${titleColor}`}>{title}</span>
-          {isTracking && <span className="text-[8px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded uppercase">tracking</span>}
-        </div>
-        {phaseLabel && <span className={`text-[10px] font-mono uppercase ${phaseColor}`}>{phaseLabel}</span>}
-      </div>
+    <div>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3, marginBottom: 2 }}>{l}</div>
+      <div style={{ fontSize: 15, fontFamily: "'SF Mono','Cascadia Code','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: warn ? 1 : 0.8, color: warn ? '#f87171' : 'inherit' }}>{v}</div>
+    </div>
+  )
+}
 
-      <div className="flex gap-3">
-        {/* Left: telemetry grid */}
-        <div className="flex-1">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <TelRow label="Alt" value={fmtDist(altitude)} color="text-cyan-400" />
-            <TelRow label="Spd" value={fmtVel(speed)} color="text-green-400" />
-            <TelRow label="V↑" value={fmtVel(vr)} color={vr >= 0 ? 'text-green-300' : 'text-red-300'} />
-            <TelRow label="V→" value={fmtVel(vt)} color="text-blue-300" />
-            <TelRow label="Pitch" value={`${deg(angle)}°`} color="text-teal-400" />
-            <TelRow label="AoA" value={`${deg(alpha)}°`} color="text-amber-400" />
-            <TelRow label="ω" value={`${deg(omega)}°/s`} color="text-purple-300" />
-            <TelRow label="Gimbal" value={`${deg(gimbal)}°`} color="text-orange-300" />
-            {finDeflection != null && (
-              <TelRow label="Fins" value={`${deg(finDeflection)}°`} color="text-yellow-300" />
-            )}
+/* ── Fuel ── */
+function Fuel({ label, pct }) {
+  const c = pct > 20 ? '#4ade80' : pct > 5 ? '#facc15' : '#f87171'
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="8" height="8"><circle cx="4" cy="4" r="4" fill={c} /></svg>
+          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.3 }}>{label}</span>
+        </div>
+        <span style={{ fontSize: 12, fontFamily: "'SF Mono','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: 0.4 }}>{pct.toFixed(0)}%</span>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 2, background: 'rgba(255,255,255,0.25)', width: `${pct}%`, transition: 'width 0.15s' }} />
+      </div>
+    </div>
+  )
+}
+
+/* ── Vehicle ── */
+function Vehicle({ name, active, dimmed, badge, badgeDot, alt, spd, vr, vt, pitch, aoa, omega, gimbal, fins, dist, vel, deg, angle, engine }) {
+  return (
+    <div style={{
+      ...panelStyle,
+      padding: '20px 22px',
+      opacity: dimmed ? 0.25 : 1,
+      transition: 'opacity 0.3s',
+      borderLeft: active ? '3px solid rgba(34,211,238,0.4)' : '3px solid transparent',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 }}>{name}</span>
+        {badge && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="7" height="7"><circle cx="3.5" cy="3.5" r="3.5" fill={badgeDot} /></svg>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.4 }}>{badge}</span>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Right: rotation indicator + engine diagram */}
-        <div className="flex flex-col items-center gap-1">
-          <RotationIndicator angle={angle ?? 0} size={44} color={titleColor.includes('cyan') ? '#22d3ee' : '#fb923c'} />
-          {engineIndicator}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, margin: '16px 0' }}>
+        <Attitude angle={angle} />
+        {engine}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+        <Mini l="Alt" v={dist(alt)} />
+        <Mini l="Speed" v={vel(spd)} />
+        <Mini l="Vert" v={vel(vr)} warn={vr < 0} />
+        <Mini l="Horiz" v={vel(vt)} />
+        <Mini l="Pitch" v={`${deg(pitch)}°`} />
+        <Mini l="AoA" v={`${deg(aoa)}°`} />
+        <Mini l="ω" v={`${deg(omega)}°/s`} />
+        <Mini l="Gimbal" v={`${deg(gimbal)}°`} />
+        {fins != null && <Mini l="Fins" v={`${deg(fins)}°`} />}
       </div>
     </div>
   )
 }
 
-// ===== Rotation Indicator =====
-function RotationIndicator({ angle, size, color }) {
-  const cx = size / 2
-  const cy = size / 2
-  const r = size / 2 - 4
-  // Rocket body line
-  const tipX = cx + Math.sin(-angle) * (r - 2)
-  const tipY = cy - Math.cos(-angle) * (r - 2)
-  const baseX = cx - Math.sin(-angle) * (r * 0.5)
-  const baseY = cy + Math.cos(-angle) * (r * 0.5)
-
+function Mini({ l, v, warn }) {
   return (
-    <svg width={size} height={size} className="flex-shrink-0">
-      {/* Reference circle */}
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-      {/* Horizon line */}
-      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
-      {/* Rocket body */}
-      <line x1={baseX} y1={baseY} x2={tipX} y2={tipY} stroke={color} strokeWidth={2.5} strokeLinecap="round" />
-      {/* Nose dot */}
-      <circle cx={tipX} cy={tipY} r={2} fill={color} />
-    </svg>
-  )
-}
-
-function TelRow({ label, value, color, small }) {
-  return (
-    <div>
-      <div className="text-[8px] text-white/30 uppercase leading-tight">{label}</div>
-      <div className={`${small ? 'text-[11px]' : 'text-[13px]'} ${color} font-mono leading-tight`}>{value}</div>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.25, marginBottom: 1 }}>{l}</div>
+      <div style={{ fontSize: 13, fontFamily: "'SF Mono','Consolas',monospace", fontVariantNumeric: 'tabular-nums', opacity: warn ? 1 : 0.7, color: warn ? '#f87171' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div>
     </div>
   )
 }
 
-function FuelBar({ label, pct, color }) {
+/* ── Attitude (64px) ── */
+function Attitude({ angle }) {
+  const s = 64, cx = 32, cy = 32, r = 27
+  const tx = cx + Math.sin(-angle) * (r - 2), ty = cy - Math.cos(-angle) * (r - 2)
+  const bx = cx - Math.sin(-angle) * (r * 0.5), by = cy + Math.cos(-angle) * (r * 0.5)
+  const tick = (d) => {
+    const a = d * Math.PI / 180
+    return { x1: cx + Math.sin(a) * (r - 1), y1: cy - Math.cos(a) * (r - 1), x2: cx + Math.sin(a) * (r + 3), y2: cy - Math.cos(a) * (r + 3) }
+  }
   return (
-    <div>
-      <div className="flex justify-between text-[9px]">
-        <span className="text-white/30 uppercase">{label}</span>
-        <span className="text-white/40 font-mono">{pct.toFixed(0)}%</span>
-      </div>
-      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mt-0.5">
-        <div
-          className="h-full rounded-full transition-all duration-100"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ===== Engine Indicators =====
-
-// Booster: 3 inner, 10 middle, 20 outer
-function BoosterEngineIndicator({ active, phase }) {
-  const inner = active
-  const middle = active && (phase === 'boostback' || !phase)
-  const outer = active && !phase
-  const onColor = '#ff8800'
-  const offColor = 'rgba(255,255,255,0.08)'
-
-  return (
-    <svg width="52" height="52" viewBox="-16 -16 32 32" className="flex-shrink-0">
-      {/* Outer ring: 20 engines */}
-      {Array.from({ length: 20 }, (_, i) => {
-        const a = (i / 20) * Math.PI * 2
-        return <circle key={`o${i}`} cx={Math.cos(a) * 13.5} cy={Math.sin(a) * 13.5} r={1.3} fill={outer ? onColor : offColor} />
-      })}
-      {/* Middle ring: 10 engines */}
-      {Array.from({ length: 10 }, (_, i) => {
-        const a = (i / 10) * Math.PI * 2
-        return <circle key={`m${i}`} cx={Math.cos(a) * 8.5} cy={Math.sin(a) * 8.5} r={1.6} fill={middle ? onColor : offColor} />
-      })}
-      {/* Inner ring: 3 engines */}
-      {Array.from({ length: 3 }, (_, i) => {
-        const a = (i / 3) * Math.PI * 2 - Math.PI / 2
-        return <circle key={`i${i}`} cx={Math.cos(a) * 3.5} cy={Math.sin(a) * 3.5} r={2} fill={inner ? onColor : offColor} />
-      })}
+    <svg width={s} height={s} style={{ flexShrink: 0 }}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+      <line x1={cx - r} y1={cy} x2={cx + r} y2={cy} stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />
+      {[0, 90, 180, 270].map(d => { const t = tick(d); return <line key={d} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} /> })}
+      <line x1={bx} y1={by} x2={tx} y2={ty} stroke="#22d3ee" strokeWidth={2.5} strokeLinecap="round" />
+      <circle cx={tx} cy={ty} r={2} fill="#22d3ee" />
     </svg>
   )
 }
 
-// Ship: 3 SL (inner), 3 Vac (outer)
-function ShipEngineIndicator({ active }) {
-  const onColor = '#4488ff'
-  const offColor = 'rgba(255,255,255,0.08)'
-
+/* ── Engines (72px) ── */
+function BoosterEngine({ on, phase }) {
+  const inner = on, mid = on && (phase === 'boostback' || !phase), outer = on && !phase
+  const hot = '#ff8800', off = 'rgba(255,255,255,0.06)'
   return (
-    <svg width="52" height="52" viewBox="-16 -16 32 32" className="flex-shrink-0">
-      {/* Vac ring: 3 engines (larger nozzles) */}
-      {Array.from({ length: 3 }, (_, i) => {
-        const a = (i / 3) * Math.PI * 2 - Math.PI / 2
-        return <circle key={`v${i}`} cx={Math.cos(a) * 10} cy={Math.sin(a) * 10} r={3.5} fill={active ? onColor : offColor} stroke={active ? '#6699ff' : 'rgba(255,255,255,0.05)'} strokeWidth={0.5} />
-      })}
-      {/* SL ring: 3 engines */}
-      {Array.from({ length: 3 }, (_, i) => {
-        const a = (i / 3) * Math.PI * 2
-        return <circle key={`s${i}`} cx={Math.cos(a) * 4} cy={Math.sin(a) * 4} r={2.5} fill={active ? '#ff8800' : offColor} />
-      })}
+    <svg width="72" height="72" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
+      {on && <circle cx={0} cy={0} r={15} fill="none" stroke="rgba(255,136,0,0.12)" strokeWidth={1.5} />}
+      {ring(20, 13.5, 1.4, outer ? hot : off)}
+      {ring(10, 8.5, 1.7, mid ? hot : off)}
+      {ring(3, 3.5, 2.1, inner ? hot : off, -Math.PI / 2)}
     </svg>
   )
+}
+
+function ShipEngine({ on }) {
+  const hot = '#4488ff', off = 'rgba(255,255,255,0.06)'
+  return (
+    <svg width="72" height="72" viewBox="-16 -16 32 32" style={{ flexShrink: 0 }}>
+      {on && <circle cx={0} cy={0} r={14} fill="none" stroke="rgba(68,136,255,0.12)" strokeWidth={1.5} />}
+      {ring(3, 10, 3.5, on ? hot : off, -Math.PI / 2)}
+      {ring(3, 4, 2.5, on ? '#ff8800' : off)}
+    </svg>
+  )
+}
+
+function ring(n, radius, dotR, fill, offset = 0) {
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2 + offset
+    return <circle key={i} cx={Math.cos(a) * radius} cy={Math.sin(a) * radius} r={dotR} fill={fill} />
+  })
 }

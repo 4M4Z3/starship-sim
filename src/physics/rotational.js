@@ -3,6 +3,15 @@
 // ============================================================
 
 /**
+ * Wrap angle to [-π, π]
+ */
+export function wrapAngle(a) {
+  a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
+  if (a > Math.PI) a -= 2 * Math.PI
+  return a
+}
+
+/**
  * Integrate angular dynamics for one timestep (symplectic Euler)
  *
  * @param {Object} params

@@ -1,11 +1,7 @@
 import { useRef, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { EARTH_RADIUS } from '../physics/index.js'
-
-// Launch site: SpaceX Starbase, Boca Chica TX
-const LAUNCH_LAT = 25.996 * (Math.PI / 180)
-const LAUNCH_LON = -97.154 * (Math.PI / 180)
+import { EARTH_RADIUS, LAUNCH_LAT, LAUNCH_LON } from '../physics/index.js'
 
 // Compute rotation quaternion to place Boca Chica at Y+
 // (same as TiledEarth uses)

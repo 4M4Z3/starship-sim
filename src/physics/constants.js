@@ -5,12 +5,16 @@
 
 export const G0 = 9.80665 // standard gravity (m/s²)
 export const EARTH_RADIUS = 6_371_000 // m
-export const GM = G0 * EARTH_RADIUS * EARTH_RADIUS // μ ≈ 3.986e14 m³/s²
+export const GM = 3.986004418e14 // m³/s² (IERS standard gravitational parameter)
 export const GAMMA = 1.4
 export const R_AIR = 287.058
 
 // Target orbit altitude (m)
 export const TARGET_ORBIT = 200_000
+
+// Launch site: SpaceX Starbase, Boca Chica TX
+export const LAUNCH_LAT = 25.99622065480988 * (Math.PI / 180) // rad
+export const LAUNCH_LON = -97.15443150451574 * (Math.PI / 180) // rad
 
 const PAYLOAD_MASS = 0 // IFT-5: no payload (test flight)
 

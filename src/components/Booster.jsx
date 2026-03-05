@@ -12,12 +12,7 @@ export default function Booster({ simRef, groupRef }) {
   const spriteRef = useRef()
   const gridFinsRef = useRef([])
   const [modelReady, setModelReady] = useState(false)
-
-  // Re-render every frame so props to EnginePlumes stay current
-  const [, setTick] = useState(0)
-  useFrame(() => {
-    setTick(t => t + 1)
-  })
+  const [boosterPhase, setBoosterPhase] = useState('attached')
 
   // Clone the FULL scene (same as Rocket) — preserves all transforms.
   // We'll hide non-booster parts instead of extracting just the booster node.
@@ -61,75 +56,54 @@ export default function Booster({ simRef, groupRef }) {
     root.position.x = -(box2.min.x + box2.max.x) / 2
     root.position.z = -(box2.min.z + box2.max.z) / 2
 
-    // Hide everything except the booster
+    // Hide everything, then selectively show only the booster subtree
     root.traverse((child) => {
-      if (child === root) return
-      // Hide top-level children that aren't the booster
-      if (child.parent === root || child.parent?.parent === root) {
-        if (child.name && child.name.startsWith('Superheavy')) {
-          child.visible = true
-        }
+      if (child.isMesh) {
+        child.visible = false
       }
     })
 
-    // Position so booster base is at y=0
     if (boosterNode) {
+      boosterNode.visible = true
+      boosterNode.traverse((child) => {
+        child.visible = true
+      })
+
+      let ancestor = boosterNode.parent
+      while (ancestor && ancestor !== root) {
+        ancestor.visible = true
+        ancestor = ancestor.parent
+      }
+
       root.updateMatrixWorld(true)
       const bBox = new THREE.Box3().setFromObject(boosterNode)
       root.position.y = -bBox.min.y
-
-      // Hide non-booster top-level siblings
-      for (const child of root.children) {
-        if (child === boosterNode) {
-          child.visible = true
-        } else if (!child.name?.startsWith('Superheavy')) {
-          // Check if this subtree contains the booster
-          let containsBooster = false
-          child.traverse((c) => {
-            if (c.name?.startsWith('Superheavy')) containsBooster = true
-          })
-          if (!containsBooster) {
-            child.visible = false
-          }
-        }
-      }
     } else {
       root.position.y = -box2.min.y
     }
 
-    // Apply same Y rotation as Rocket
     root.rotation.y = -Math.PI / 2
 
     gridFinsRef.current = gridFins
     setModelReady(true)
   }, [clonedScene])
 
-  const tempQuat = useMemo(() => new THREE.Quaternion(), [])
-
-  // Read sim state every frame
-  const sim = simRef.current
-  const boosterPhase = sim.staged ? sim.boosterPhase : 'attached'
-  const finDeflection = sim.boosterFinDeflection || 0
-  const altitude = sim.staged ? (sim.boosterR - EARTH_RADIUS) : sim.altitude
-
-  const engines = useMemo(() => {
-    if (boosterPhase === 'boostback') {
-      return computeEnginePositions(BOOSTER_RINGS.boostback, 4.5)
-    }
-    if (boosterPhase === 'landing' || boosterPhase === 'hover') {
-      return computeEnginePositions(BOOSTER_RINGS.landing, 4.5)
-    }
-    return []
-  }, [boosterPhase, modelReady])
-
-  const enginesOn = boosterPhase === 'boostback' || boosterPhase === 'landing' || boosterPhase === 'hover'
+  const _finQuat = useMemo(() => new THREE.Quaternion(), [])
+  const _finAxis = useMemo(() => new THREE.Vector3(1, 0, 0), [])
 
   useFrame(() => {
     if (!groupRef?.current) return
+    const sim = simRef.current
+    const phase = sim.staged ? sim.boosterPhase : 'attached'
 
-    if (boosterPhase === 'attached' || boosterPhase === 'splashed') {
+    if (phase === 'attached' || phase === 'splashed') {
       groupRef.current.visible = false
       return
+    }
+
+    // Only trigger React re-render when booster phase changes (affects engine config)
+    if (phase !== boosterPhase) {
+      setBoosterPhase(phase)
     }
 
     const dist = groupRef.current.position.length()
@@ -149,14 +123,29 @@ export default function Booster({ simRef, groupRef }) {
       }
     }
 
+    const finDeflection = sim.boosterFinDeflection || 0
     for (let i = 0; i < gridFinsRef.current.length; i++) {
       const fin = gridFinsRef.current[i]
       const orig = fin.userData.origQuat
       if (!orig) continue
-      tempQuat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), finDeflection)
-      fin.quaternion.copy(orig).multiply(tempQuat)
+      _finQuat.setFromAxisAngle(_finAxis, finDeflection)
+      fin.quaternion.copy(orig).multiply(_finQuat)
     }
   })
+
+  const engines = useMemo(() => {
+    if (boosterPhase === 'boostback') {
+      return computeEnginePositions(BOOSTER_RINGS.boostback, 4.5)
+    }
+    if (boosterPhase === 'landing' || boosterPhase === 'hover') {
+      return computeEnginePositions(BOOSTER_RINGS.landing, 4.5)
+    }
+    return []
+  }, [boosterPhase, modelReady])
+
+  const sim = simRef.current
+  const enginesOn = boosterPhase === 'boostback' || boosterPhase === 'landing' || boosterPhase === 'hover'
+  const altitude = sim.staged ? (sim.boosterR - EARTH_RADIUS) : sim.altitude
 
   return (
     <group ref={groupRef}>

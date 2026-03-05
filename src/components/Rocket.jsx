@@ -12,12 +12,7 @@ export default function Rocket({ simRef, groupRef }) {
   const baseRadiusRef = useRef(6)
   const shipBaseYRef = useRef(70)
   const [modelReady, setModelReady] = useState(false)
-
-  // Re-render periodically so props to EnginePlumes stay current
-  const [, setTick] = useState(0)
-  useFrame(() => {
-    setTick(t => t + 1)
-  })
+  const [separated, setSeparated] = useState(false)
 
   useEffect(() => {
     const root = innerRef.current
@@ -32,6 +27,7 @@ export default function Rocket({ simRef, groupRef }) {
         child.castShadow = true
         child.receiveShadow = true
         if (child.material) {
+          child.material = child.material.clone()
           child.material.side = THREE.DoubleSide
           child.material.envMapIntensity = 0.8
         }
@@ -58,8 +54,6 @@ export default function Rocket({ simRef, groupRef }) {
     root.position.z = -(box2.min.z + box2.max.z) / 2
     root.rotation.y = -Math.PI / 2
 
-    // Model is at 1:1 meter scale (120m total). Base radius = 4.5m (9m diameter).
-    // Don't use bounding box — grid fins etc. make it too wide.
     baseRadiusRef.current = 4.5
 
     if (boosterNode) {
@@ -72,10 +66,7 @@ export default function Rocket({ simRef, groupRef }) {
     setModelReady(true)
   }, [])
 
-  // Read sim state every frame for model updates
-  const sim = simRef.current
-  const separated = sim.staged
-
+  // Only re-render when staging state actually changes (not every frame)
   useFrame(() => {
     const s = simRef.current
     const { gridFins, boosterNode } = partsRef.current
@@ -90,6 +81,10 @@ export default function Rocket({ simRef, groupRef }) {
     if (boosterNode) {
       boosterNode.visible = !s.staged
     }
+
+    if (s.staged !== separated) {
+      setSeparated(s.staged)
+    }
   })
 
   const engines = useMemo(() => {
@@ -100,6 +95,8 @@ export default function Rocket({ simRef, groupRef }) {
     return computeEnginePositions(BOOSTER_RINGS.all, r)
   }, [separated, modelReady])
 
+  // Read sim state for plume props (EnginePlumes handles its own useFrame animation)
+  const sim = simRef.current
   const plumeY = separated ? shipBaseYRef.current - 2 : -2
 
   return (

@@ -9,18 +9,30 @@ function LoadingOverlay() {
   const { progress, active } = useProgress()
   const [visible, setVisible] = useState(true)
   const [opacity, setOpacity] = useState(1)
+  const maxProgress = useRef(0)
+  const doneOnce = useRef(false)
+
+  // Only ever move the bar forward — never backwards
+  if (progress > maxProgress.current) {
+    maxProgress.current = progress
+  }
+  // Once we hit 100 and loading stops, lock it
+  if (progress >= 100 && !active) {
+    maxProgress.current = 100
+    doneOnce.current = true
+  }
+
+  const displayProgress = maxProgress.current
 
   useEffect(() => {
-    if (progress >= 100 && !active) {
-      // Short delay then fade out
-      const timer = setTimeout(() => {
-        setOpacity(0)
-        const hideTimer = setTimeout(() => setVisible(false), 600)
-        return () => clearTimeout(hideTimer)
-      }, 400)
-      return () => clearTimeout(timer)
-    }
-  }, [progress, active])
+    if (!doneOnce.current) return
+    const timer = setTimeout(() => {
+      setOpacity(0)
+      const hideTimer = setTimeout(() => setVisible(false), 600)
+      return () => clearTimeout(hideTimer)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [displayProgress >= 100 && !active])
 
   if (!visible) return null
 
@@ -63,7 +75,7 @@ function LoadingOverlay() {
       >
         <div
           style={{
-            width: `${progress}%`,
+            width: `${displayProgress}%`,
             height: '100%',
             background: '#fff',
             transition: 'width 0.3s ease-out',
@@ -78,7 +90,7 @@ function LoadingOverlay() {
           fontFamily: 'monospace',
         }}
       >
-        {Math.round(progress)}%
+        {Math.round(displayProgress)}%
       </p>
     </div>
   )
@@ -158,6 +170,7 @@ export default function App() {
         onStop={handleStop}
         onReset={handleReset}
         onToggleCamera={handleToggleCamera}
+        onSetCamera={setCameraTarget}
       />
     </div>
   )
