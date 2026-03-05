@@ -159,7 +159,7 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-black relative">
       <Canvas
-        camera={{ position: [700, 250, 700], fov: 50, near: 0.5, far: 20000000 }}
+        camera={{ position: [300, 120, 300], fov: 50, near: 0.5, far: 20000000 }}
         gl={{ antialias: true, toneMapping: 3, logarithmicDepthBuffer: true }}
         shadows
       >

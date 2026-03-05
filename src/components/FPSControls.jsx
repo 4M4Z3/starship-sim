@@ -9,7 +9,7 @@ const MIN_DISTANCE = 50
 const BASE_MAX_DISTANCE = 2000
 
 // Ground camera: fixed position near launchpad, telephoto lens tracking the rocket
-const GROUND_CAM_OFFSET = new THREE.Vector3(-600, 8, 1200)
+const GROUND_CAM_OFFSET = new THREE.Vector3(-400, 5, 800)
 const ORBIT_FOV = 50
 
 // Known vehicle dimensions (meters)
@@ -21,7 +21,7 @@ const BOOSTER_HEIGHT = 71
 const BOOSTER_CENTER = 15       // near base of booster
 
 // How much of the screen height the rocket should fill (0.0–1.0)
-const FILL_FRACTION = 2.0
+const FILL_FRACTION = 0.7
 
 // Reusable vectors to avoid per-frame allocations
 const _earthCenter = new THREE.Vector3()
