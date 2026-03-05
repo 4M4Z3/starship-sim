@@ -50,9 +50,9 @@ export const SHIP_RINGS = [
 
 // Plume visual layers
 const LAYER_DEFS = [
-  { rScale: 0.5,  hScale: 14.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
-  { rScale: 0.9,  hScale: 22.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
-  { rScale: 1.4,  hScale: 30.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
+  { rScale: 1.2,  hScale: 30.0, color: '#cceeff', opacity: 0.95, additive: true },   // hot core
+  { rScale: 2.0,  hScale: 45.0, color: '#ffcc44', opacity: 0.6,  additive: true },   // main flame
+  { rScale: 3.0,  hScale: 60.0, color: '#ff6600', opacity: 0.25, additive: false },  // outer glow
 ]
 
 const _matrix = new THREE.Matrix4()
