@@ -8,6 +8,7 @@ import Booster from './Booster'
 import LaunchPad from './LaunchPad'
 import OrbitControls from './FPSControls'
 import SunLight from './SunLight'
+import Stars from './Stars'
 import { physicsStep, EARTH_RADIUS, LAUNCH_LAT, LAUNCH_LON } from '../physics/index.js'
 
 function SkyFade({ worldOffsetRef }) {
@@ -146,6 +147,7 @@ export default function Scene({ phase, simRef, timeScaleRef, onLanded, onFuelExh
   return (
     <>
       <SkyFade worldOffsetRef={worldOffsetRef} />
+      <Stars worldOffsetRef={worldOffsetRef} />
       <SunLight worldOffsetRef={worldOffsetRef} />
       <OrbitControls
         rocketRef={rocketGroupRef}
