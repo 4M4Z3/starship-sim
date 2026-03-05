@@ -39,6 +39,11 @@ export function initModel(root, {
     }
   })
 
+  // Reset transforms so effect is idempotent under StrictMode
+  root.scale.set(1, 1, 1)
+  root.position.set(0, 0, 0)
+  root.rotation.set(0, 0, 0)
+
   // Scale to target height
   root.updateMatrixWorld(true)
   const box = new THREE.Box3().setFromObject(root)
