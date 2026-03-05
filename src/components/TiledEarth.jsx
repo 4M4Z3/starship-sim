@@ -3,6 +3,27 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { EARTH_RADIUS, LAUNCH_LAT, LAUNCH_LON } from '../physics/index.js'
 
+// Shader patch: detect ocean pixels (blue-dominant) and make them reflective
+function patchOceanReflection(shader) {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `#include <roughnessmap_fragment>
+    // Ocean detection: blue channel dominates, low red+green = water
+    vec3 albedo = diffuseColor.rgb;
+    float blueRatio = albedo.b / (max(albedo.r + albedo.g + albedo.b, 0.001));
+    float darkness = 1.0 - (albedo.r + albedo.g + albedo.b) / 3.0;
+    float oceanMask = smoothstep(0.38, 0.50, blueRatio) * smoothstep(0.3, 0.6, darkness);
+    roughnessFactor = mix(roughnessFactor, 0.15, oceanMask);
+    `
+  )
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <metalnessmap_fragment>',
+    `#include <metalnessmap_fragment>
+    metalnessFactor = mix(metalnessFactor, 0.3, oceanMask);
+    `
+  )
+}
+
 // Tile definitions: 4×2 grid covering the globe
 // A1 contains the launch site (Boca Chica) — uses higher tessellation so the
 // mesh surface stays close to the true sphere and the launchpad doesn't float.
@@ -256,12 +277,13 @@ export default function TiledEarth() {
             <meshStandardMaterial
               ref={r => { if (r) materialsRef.current[tile.id] = r }}
               color="#0a1a3a"
-              roughness={1}
+              roughness={0.85}
               metalness={0}
               depthWrite
               polygonOffset
               polygonOffsetFactor={1}
               polygonOffsetUnits={1}
+              onBeforeCompile={patchOceanReflection}
             />
           </mesh>
         ))}
@@ -291,35 +313,43 @@ export default function TiledEarth() {
         renderOrder={-1}
         visible={false}
       >
-        <sphereGeometry args={[EARTH_RADIUS + 80000, 64, 32]} />
+        <sphereGeometry args={[EARTH_RADIUS + 80000, 128, 64]} />
         <shaderMaterial
           transparent
           depthWrite={false}
           side={THREE.BackSide}
           uniforms={{ uOpacity: { value: 0 } }}
           vertexShader={`
-            varying vec3 vNormal;
-            varying vec3 vViewDir;
+            varying vec3 vWorldPos;
+            varying vec3 vWorldNormal;
             void main() {
               vec4 worldPos = modelMatrix * vec4(position, 1.0);
-              vNormal = normalize(normalMatrix * normal);
-              vViewDir = normalize(cameraPosition - worldPos.xyz);
+              vWorldPos = worldPos.xyz;
+              vWorldNormal = normalize(mat3(modelMatrix) * normal);
               gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
           `}
           fragmentShader={`
             uniform float uOpacity;
-            varying vec3 vNormal;
-            varying vec3 vViewDir;
+            varying vec3 vWorldPos;
+            varying vec3 vWorldNormal;
             void main() {
-              float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
-              // Sharp bright rim at the edge, soft inner glow
-              float rim = pow(fresnel, 2.0);
-              float core = pow(fresnel, 5.0) * 0.5;
-              vec3 rimColor = vec3(0.4, 0.7, 1.0);
-              vec3 coreColor = vec3(0.6, 0.85, 1.0);
-              vec3 color = rimColor * rim + coreColor * core;
-              float alpha = (rim * 0.8 + core) * uOpacity;
+              vec3 viewDir = normalize(cameraPosition - vWorldPos);
+              float fresnel = 1.0 - abs(dot(vWorldNormal, viewDir));
+
+              // Multi-layer blend for smooth, natural atmosphere
+              float outer = smoothstep(0.0, 1.0, fresnel);         // broad soft glow
+              float mid   = smoothstep(0.3, 1.0, fresnel);         // visible rim
+              float inner = smoothstep(0.65, 1.0, fresnel);        // bright limb
+
+              // Color gradient: deep blue at edge, lighter blue inward, hint of white at limb
+              vec3 deepBlue  = vec3(0.15, 0.35, 0.8);
+              vec3 skyBlue   = vec3(0.4, 0.7, 1.0);
+              vec3 whiteGlow = vec3(0.7, 0.88, 1.0);
+
+              vec3 color = deepBlue * outer + skyBlue * mid * 0.6 + whiteGlow * inner * 0.4;
+              float alpha = (outer * 0.25 + mid * 0.4 + inner * 0.5) * uOpacity;
+
               gl_FragColor = vec4(color, alpha);
             }
           `}
